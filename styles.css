@@ -36,7 +36,7 @@ body{font-size:16px}
 .settings-form input,.settings-form select,.field-label input,.field-label select{height:48px;font-size:16px}
 .primary-button,.secondary-button{min-height:48px;padding-inline:16px;font-size:15px}
 .icon-button{width:48px;height:48px;font-size:22px}
-.menu-drawer{position:fixed;inset-block:0;inset-inline-start:0;margin:0;width:min(88vw,360px);height:100dvh;max-height:100dvh;padding:22px 18px max(22px,env(safe-area-inset-bottom));border:1px solid var(--line);border-radius:18px 0 0 18px;background:var(--bg);color:var(--text);box-shadow:0 0 40px #0009}
+.menu-drawer{position:fixed;inset-block:0;inset-inline-start:0;margin:0;width:min(50vw,420px);height:100dvh;max-height:100dvh;padding:22px 18px max(22px,env(safe-area-inset-bottom));border:1px solid var(--line);border-radius:18px 0 0 18px;background:var(--bg);color:var(--text);box-shadow:0 0 40px #0009;overscroll-behavior:contain}
 .menu-drawer::backdrop{background:#0009;backdrop-filter:blur(2px)}
 .menu-drawer[open]{display:flex;flex-direction:column;gap:10px}
 .menu-drawer .dialog-heading{margin-bottom:8px}

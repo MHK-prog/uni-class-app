@@ -1,26 +1,84 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#09080d"><meta name="description" content="برنامه کلاس‌ها با وضعیت زنده، هفته‌های زوج و فرد و زمان ایران.">
-  <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <title>برنامه کلاس‌های من</title><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css"><script src="app.js" defer></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#09080d">
+  <title>برنامهٔ کلاس‌ها</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
 </head>
 <body>
-<main class="app-shell">
-  <header class="topbar">
-    <a class="brand" href="./" aria-label="صفحه برنامه کلاس‌ها"><span class="brand-icon" aria-hidden="true">◷</span><span><strong>برنامه کلاس‌های من</strong><small>همیشه همراهت</small></span></a>
-    <div class="top-actions"><button class="icon-button" id="import-button" type="button" title="وارد کردن برنامه" aria-label="وارد کردن برنامه">↑</button><button class="icon-button" id="export-button" type="button" title="ذخیره نسخه پشتیبان" aria-label="ذخیره نسخه پشتیبان">↓</button><button class="primary-button add-button" id="add-course-button" type="button"><span aria-hidden="true">＋</span> افزودن درس</button></div>
-  </header>
-  <section class="hero" aria-labelledby="page-title"><div class="hero-main"><p class="eyebrow">برنامهٔ روزانه</p><h1 id="page-title">سلام، آمادهٔ یک روز خوب؟</h1><p class="date-line"><span id="selected-date">—</span><span class="clock-dot" aria-hidden="true"></span><span>ساعت ایران</span><strong id="iran-clock">—</strong></p></div><div class="week-badge"><span class="week-dot"></span><span>هفتهٔ <strong id="week-parity">—</strong></span></div><div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div></section>
-  <nav class="day-switch" aria-label="انتخاب روز"><button type="button" class="day-option active" data-day="today" aria-pressed="true"><span>امروز</span><small id="today-name">—</small></button><button type="button" class="day-option" data-day="tomorrow" aria-pressed="false"><span>فردا</span><small id="tomorrow-name">—</small></button></nav>
-  <section class="stats" aria-label="آمار کلاس‌های روز انتخاب‌شده"><article class="stat-card stat-upcoming"><span class="stat-icon">◷</span><div><strong id="count-upcoming">۰</strong><small>در پیش</small></div></article><article class="stat-card stat-live"><span class="stat-icon">●</span><div><strong id="count-live">۰</strong><small>در حال برگزاری</small></div></article><article class="stat-card stat-done"><span class="stat-icon">✓</span><div><strong id="count-done">۰</strong><small>تمام‌شده</small></div></article></section>
-  <section class="schedule-section" aria-labelledby="schedule-heading"><div class="section-heading"><div><p class="eyebrow" id="schedule-kicker">برنامهٔ امروز</p><h2 id="schedule-heading">کلاس‌های شما</h2></div><span class="class-count" id="class-count">۰ کلاس</span></div><div id="schedule-list" class="schedule-list" aria-live="polite"></div><div id="empty-state" class="empty-state" hidden><span class="empty-illustration" aria-hidden="true">☀</span><h3 id="empty-title">برای این روز کلاسی ثبت نشده</h3><p id="empty-copy">می‌توانید درس‌هایتان را اضافه کنید یا فایل برنامه‌تان را وارد کنید.</p><button type="button" class="secondary-button" id="empty-import-button">وارد کردن برنامه</button></div></section>
-  <section id="incomplete-section" class="incomplete-section" hidden aria-labelledby="incomplete-heading"><div class="section-heading compact-heading"><div><p class="eyebrow">نیازمند تکمیل</p><h2 id="incomplete-heading">برنامهٔ ناقص</h2></div></div><div id="incomplete-list" class="schedule-list"></div></section>
-  <details class="settings-panel"><summary><span class="settings-mark" aria-hidden="true">⚙</span><span><strong>تنظیم مبنای هفتهٔ زوج و فرد</strong><small>برنامه به‌صورت خودکار هر هفته جابه‌جا می‌شود</small></span><span class="chevron" aria-hidden="true">⌄</span></summary><form id="week-settings-form" class="settings-form"><label>شنبهٔ آغاز یک هفتهٔ <strong id="anchor-parity-label">زوج</strong><input id="anchor-date" type="date" min="2026-10-03" step="7" required></label><label>نوع همان هفته<select id="anchor-parity"><option value="even">زوج</option><option value="odd">فرد</option></select></label><button class="secondary-button" type="submit">ذخیرهٔ مبنا</button><p class="settings-help">مبنا به‌صورت پیش‌فرض شنبهٔ ۳ اکتبر ۲۰۲۶ است که آن را هفتهٔ زوج در نظر گرفته‌ایم. اگر تقویم دانشگاهتان مبنای دیگری دارد، اینجا اصلاحش کنید.</p></form></details>
-  <footer class="privacy-note"><span aria-hidden="true">▣</span><p>اطلاعات درس‌ها فقط در همین مرورگر ذخیره می‌شود و به سرور ارسال نمی‌شود.</p></footer>
-</main>
-<input id="import-file" type="file" accept="application/json,.json" hidden>
-<dialog id="course-dialog" class="course-dialog"><form id="course-form" novalidate><div class="dialog-heading"><div><p class="eyebrow">برنامهٔ درسی</p><h2 id="dialog-title">افزودن درس</h2></div><button type="button" class="icon-button close-dialog" aria-label="بستن">×</button></div><input id="course-id" name="id" type="hidden"><label class="field-label">نام درس<input name="title" id="course-title" maxlength="80" required placeholder="مثلاً ریاضی عمومی ۲"></label><div class="field-row"><label class="field-label">روز کلاس<select name="day" id="course-day"><option value="">انتخاب روز</option></select></label><label class="field-label">نوع هفته<select name="week" id="course-week"><option value="weekly">هر هفته</option><option value="even">هفتهٔ زوج</option><option value="odd">هفتهٔ فرد</option></select></label></div><div class="field-row"><label class="field-label">ساعت شروع<input name="start" id="course-start" type="time"></label><label class="field-label">ساعت پایان<input name="end" id="course-end" type="time"></label></div><label class="field-label">کلاس / مکان <span class="optional">اختیاری</span><input name="room" id="course-room" maxlength="50" placeholder="مثلاً ۲۱۲"></label><p class="form-hint">اگر روز یا ساعت را نمی‌دانید، خالی بگذارید تا درس در بخش «برنامهٔ ناقص» بماند.</p><p id="form-error" class="form-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="secondary-button cancel-dialog">انصراف</button><button type="submit" class="primary-button">ذخیرهٔ درس</button></div></form></dialog>
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
-</body></html>
+  <main class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="برنامهٔ کلاس‌ها">
+        <span class="brand-icon" aria-hidden="true">◷</span>
+        <strong>کلاس‌های من</strong>
+      </a>
+      <div class="top-actions">
+        <button class="quiet-button" id="import-button" type="button">ورود</button>
+        <button class="quiet-button" id="export-button" type="button">پشتیبان</button>
+        <button class="primary-button add-button" id="add-course-button" type="button" aria-label="افزودن درس">＋</button>
+      </div>
+    </header>
+
+    <section class="day-context" aria-label="زمان و هفته">
+      <div><strong id="selected-date">—</strong><span id="iran-clock">—</span></div>
+      <span class="week-badge">هفتهٔ <strong id="week-parity">—</strong></span>
+    </section>
+
+    <nav class="day-switch" aria-label="انتخاب روز">
+      <button type="button" class="day-option active" data-day="today" aria-pressed="true"><span>امروز</span><small id="today-name">—</small></button>
+      <button type="button" class="day-option" data-day="tomorrow" aria-pressed="false"><span>فردا</span><small id="tomorrow-name">—</small></button>
+    </nav>
+
+    <section class="schedule-section" aria-labelledby="schedule-heading">
+      <h1 id="schedule-heading">کلاس‌ها</h1>
+      <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
+      <div id="empty-state" class="empty-state" hidden>
+        <p id="empty-title">امروز کلاسی ندارید</p>
+        <button type="button" class="secondary-button" id="empty-import-button">ورود برنامه</button>
+      </div>
+    </section>
+
+    <section id="incomplete-section" class="incomplete-section" hidden aria-labelledby="incomplete-heading">
+      <h2 id="incomplete-heading">درس‌های بدون زمان</h2>
+      <div id="incomplete-list" class="schedule-list"></div>
+    </section>
+
+    <details class="settings-panel">
+      <summary aria-label="تنظیم هفتهٔ زوج و فرد">تنظیم هفته</summary>
+      <form id="week-settings-form" class="settings-form">
+        <label>شنبهٔ مبنا<input id="anchor-date" type="date" min="2026-10-03" step="7" required></label>
+        <label>هفتهٔ مبنا<select id="anchor-parity"><option value="even">زوج</option><option value="odd">فرد</option></select></label>
+        <button class="secondary-button" type="submit">ذخیره</button>
+      </form>
+    </details>
+
+    <footer class="app-footer">نسخهٔ <span id="app-version">1.1.0</span></footer>
+  </main>
+
+  <input id="import-file" type="file" accept="application/json,.json" hidden>
+  <dialog id="course-dialog" class="course-dialog">
+    <form id="course-form" novalidate>
+      <div class="dialog-heading"><h2 id="dialog-title">افزودن درس</h2><button type="button" class="icon-button close-dialog" aria-label="بستن">×</button></div>
+      <input id="course-id" name="id" type="hidden">
+      <label class="field-label">نام درس<input name="title" id="course-title" maxlength="80" required placeholder="نام درس"></label>
+      <div class="field-row">
+        <label class="field-label">روز<select name="day" id="course-day"><option value="">روز</option></select></label>
+        <label class="field-label">هفته<select name="week" id="course-week"><option value="weekly">هر هفته</option><option value="even">زوج</option><option value="odd">فرد</option></select></label>
+      </div>
+      <div class="field-row">
+        <label class="field-label">شروع<input name="start" id="course-start" type="time"></label>
+        <label class="field-label">پایان<input name="end" id="course-end" type="time"></label>
+      </div>
+      <label class="field-label">کلاس<input name="room" id="course-room" maxlength="50" placeholder="اختیاری"></label>
+      <p id="form-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" class="secondary-button cancel-dialog">لغو</button><button type="submit" class="primary-button">ذخیره</button></div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

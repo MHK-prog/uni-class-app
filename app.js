@@ -1,6 +1,8 @@
 'use strict';
 
 const TIME_ZONE = 'Asia/Tehran';
+// Keep in sync with APP_VERSION in sw.js.
+const APP_VERSION = '1.1.0';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DEFAULT_SETTINGS = { anchorDate: '2026-10-03', anchorParity: 'even' };
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
@@ -111,7 +113,6 @@ function selectedInfo(now = new Date()) {
 function syncSettingsForm() {
   $('#anchor-date').value = state.settings.anchorDate;
   $('#anchor-parity').value = state.settings.anchorParity;
-  $('#anchor-parity-label').textContent = state.settings.anchorParity === 'even' ? 'زوج' : 'فرد';
 }
 
 function render(now = new Date()) {
@@ -120,20 +121,16 @@ function render(now = new Date()) {
   $('#selected-date').textContent = info.formatted;
   $('#today-name').textContent = today.weekday; $('#tomorrow-name').textContent = tomorrow.weekday;
   $('#week-parity').textContent = info.parity === 'even' ? 'زوج' : 'فرد';
-  $('#schedule-kicker').textContent = selectedDay === 'today' ? 'برنامهٔ امروز' : 'برنامهٔ فردا';
+  $('#app-version').textContent = APP_VERSION;
   $('#empty-title').textContent = selectedDay === 'today' ? 'امروز کلاسی ندارید' : 'فردا کلاسی ندارید';
   const matching = state.courses.filter(course => course.day === info.weekday && (course.week === 'weekly' || course.week === info.parity)).sort((a, b) => a.start.localeCompare(b.start));
   const rendered = matching.map(course => ({ course, status: statusFor(course, info.currentMinutes, info.isToday, info.parity) }));
-  $('#class-count').textContent = `${numberFa.format(rendered.length)} کلاس`;
-  $('#count-upcoming').textContent = numberFa.format(rendered.filter(item => item.status === 'upcoming').length);
-  $('#count-live').textContent = numberFa.format(rendered.filter(item => item.status === 'live').length);
-  $('#count-done').textContent = numberFa.format(rendered.filter(item => item.status === 'done').length);
   const list = $('#schedule-list');
   list.replaceChildren(...rendered.map(item => createCourseCard(item.course, item.status)));
   $('#empty-state').hidden = rendered.length !== 0; list.hidden = rendered.length === 0;
   const incomplete = state.courses.filter(course => !course.day || !course.start || !course.end);
   $('#incomplete-section').hidden = incomplete.length === 0;
-  $('#incomplete-list').replaceChildren(...incomplete.map(course => createCourseCard(course, 'incomplete'));
+  $('#incomplete-list').replaceChildren(...incomplete.map(course => createCourseCard(course, 'incomplete')));
 }
 
 function createCourseCard(course, status) {

@@ -1,16 +1,36 @@
-﻿const CACHE_NAME = 'class-schedule-static-v1';
+// Keep in sync with APP_VERSION in app.js.
+const APP_VERSION = '1.1.0';
+const CACHE_PREFIX = 'class-schedule-static-';
+const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}`;
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icon.svg'];
+
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
   self.skipWaiting();
 });
+
 self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))));
-  self.clients.claim();
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(names
+      .filter(name => name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME)
+      .map(name => caches.delete(name)));
+    await self.clients.claim();
+  })());
 });
+
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return;
-  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
-    const copy = response.clone(); caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy)); return response;
-  }).catch(() => caches.match('./index.html'))));
+  event.respondWith(caches.open(CACHE_NAME).then(async cache => {
+    const cached = await cache.match(event.request);
+    if (cached) return cached;
+    try {
+      const response = await fetch(event.request);
+      if (response.ok) await cache.put(event.request, response.clone());
+      return response;
+    } catch (error) {
+      if (event.request.mode === 'navigate') return cache.match('./index.html');
+      throw error;
+    }
+  }));
 });

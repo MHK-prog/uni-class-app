@@ -13,14 +13,10 @@
 <body>
   <main class="app-shell">
     <header class="topbar">
-      <a class="brand" href="./" aria-label="برنامهٔ کلاس‌ها">
-        <span class="brand-icon" aria-hidden="true">◷</span>
-        <strong>کلاس‌های من</strong>
-      </a>
+      <a class="brand" href="./" aria-label="برنامهٔ کلاس‌ها"><strong>کلاس‌های من</strong></a>
       <div class="top-actions">
-        <button class="quiet-button" id="import-button" type="button">ورود</button>
-        <button class="quiet-button" id="export-button" type="button">پشتیبان</button>
         <button class="primary-button add-button" id="add-course-button" type="button" aria-label="افزودن درس">＋</button>
+        <button class="menu-button" id="menu-button" type="button" aria-label="باز کردن منو" aria-haspopup="dialog" aria-controls="menu-drawer"><span aria-hidden="true">☰</span><i class="incomplete-indicator" aria-hidden="true" hidden></i></button>
       </div>
     </header>
 
@@ -35,19 +31,19 @@
     </nav>
 
     <section class="schedule-section" aria-labelledby="schedule-heading">
-      <h1 id="schedule-heading">کلاس‌ها</h1>
       <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
       <div id="empty-state" class="empty-state" hidden>
         <p id="empty-title">امروز کلاسی ندارید</p>
-        <button type="button" class="secondary-button" id="empty-import-button">ورود برنامه</button>
       </div>
     </section>
+    <footer class="app-footer"><span id="app-version">1.2.0</span></footer>
+  </main>
 
-    <section id="incomplete-section" class="incomplete-section" hidden aria-labelledby="incomplete-heading">
-      <h2 id="incomplete-heading">درس‌های بدون زمان</h2>
-      <div id="incomplete-list" class="schedule-list"></div>
-    </section>
-
+  <input id="import-file" type="file" accept="application/json,.json" hidden>
+  <dialog id="menu-drawer" class="menu-drawer" aria-label="منو">
+    <div class="dialog-heading"><h2>منو</h2><button type="button" class="icon-button close-menu" aria-label="بستن منو">×</button></div>
+    <button class="menu-action" id="import-button" type="button">ورود برنامه</button>
+    <button class="menu-action" id="export-button" type="button">ذخیرهٔ پشتیبان</button>
     <details class="settings-panel">
       <summary aria-label="تنظیم هفتهٔ زوج و فرد">تنظیم هفته</summary>
       <form id="week-settings-form" class="settings-form">
@@ -56,11 +52,8 @@
         <button class="secondary-button" type="submit">ذخیره</button>
       </form>
     </details>
-
-    <footer class="app-footer">نسخهٔ <span id="app-version">1.1.0</span></footer>
-  </main>
-
-  <input id="import-file" type="file" accept="application/json,.json" hidden>
+    <footer class="app-footer">نسخهٔ <span>1.2.0</span></footer>
+  </dialog>
   <dialog id="course-dialog" class="course-dialog">
     <form id="course-form" novalidate>
       <div class="dialog-heading"><h2 id="dialog-title">افزودن درس</h2><button type="button" class="icon-button close-dialog" aria-label="بستن">×</button></div>

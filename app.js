@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DEFAULT_SETTINGS = { anchorDate: '2026-10-03', anchorParity: 'even' };
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
@@ -123,14 +123,15 @@ function render(now = new Date()) {
   $('#week-parity').textContent = info.parity === 'even' ? 'زوج' : 'فرد';
   $('#app-version').textContent = APP_VERSION;
   $('#empty-title').textContent = selectedDay === 'today' ? 'امروز کلاسی ندارید' : 'فردا کلاسی ندارید';
-  const matching = state.courses.filter(course => course.day === info.weekday && (course.week === 'weekly' || course.week === info.parity)).sort((a, b) => a.start.localeCompare(b.start));
+  const matching = state.courses.filter(course => course.day && course.start && course.end && course.day === info.weekday && (course.week === 'weekly' || course.week === info.parity)).sort((a, b) => a.start.localeCompare(b.start));
   const rendered = matching.map(course => ({ course, status: statusFor(course, info.currentMinutes, info.isToday, info.parity) }));
   const list = $('#schedule-list');
   list.replaceChildren(...rendered.map(item => createCourseCard(item.course, item.status)));
   $('#empty-state').hidden = rendered.length !== 0; list.hidden = rendered.length === 0;
-  const incomplete = state.courses.filter(course => !course.day || !course.start || !course.end);
-  $('#incomplete-section').hidden = incomplete.length === 0;
-  $('#incomplete-list').replaceChildren(...incomplete.map(course => createCourseCard(course, 'incomplete')));
+  const hasIncomplete = state.courses.some(course => !course.day || !course.start || !course.end);
+  const indicator = $('.incomplete-indicator');
+  indicator.hidden = !hasIncomplete;
+  $('#menu-button').setAttribute('aria-label', hasIncomplete ? 'باز کردن منو؛ درس ناقص دارید' : 'باز کردن منو');
 }
 
 function createCourseCard(course, status) {
@@ -200,9 +201,10 @@ function init() {
     render();
   }));
   $('#add-course-button').addEventListener('click', () => openCourseDialog());
-  $('#empty-import-button').addEventListener('click', () => $('#import-file').click());
-  $('#import-button').addEventListener('click', () => $('#import-file').click());
-  $('#export-button').addEventListener('click', exportSchedule);
+  $('#menu-button').addEventListener('click', () => $('#menu-drawer').showModal());
+  $('.close-menu').addEventListener('click', () => $('#menu-drawer').close());
+  $('#import-button').addEventListener('click', () => { $('#menu-drawer').close(); $('#import-file').click(); });
+  $('#export-button').addEventListener('click', () => { $('#menu-drawer').close(); exportSchedule(); });
   $('#import-file').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) importSchedule(file); });
   $('.close-dialog').addEventListener('click', () => $('#course-dialog').close());
   $('.cancel-dialog').addEventListener('click', () => $('#course-dialog').close());

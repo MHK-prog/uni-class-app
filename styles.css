@@ -6,3 +6,42 @@
 @media(min-width:600px){body{padding-left:20px;padding-right:20px}.app-shell{padding-top:22px}.course-card{min-height:74px;padding:12px 14px;grid-template-columns:90px minmax(0,1fr) auto}.course-time{font-size:12px}.course-info h3{font-size:13px}}
 @media(max-width:370px){body{padding-left:10px;padding-right:10px}.brand{font-size:12px}.top-actions{gap:3px}.quiet-button{padding:0 6px;font-size:9px}.course-card{grid-template-columns:67px minmax(0,1fr) auto;gap:3px 7px;padding:9px}.course-time{font-size:10px}.course-info h3{font-size:11px}.card-action{width:25px;height:25px}.settings-form{grid-template-columns:1fr 1fr}.settings-form button{grid-column:1/-1}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
+
+/* Larger mobile text and touch targets */
+body{font-size:16px}
+.brand{font-size:17px}
+.topbar{margin-bottom:18px}
+.top-actions{gap:10px}
+.menu-button{position:relative;display:grid;place-items:center;width:48px;height:48px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--purple-soft);font-size:22px;cursor:pointer;touch-action:manipulation}
+.menu-button:active{background:var(--panel-2)}
+.incomplete-indicator{position:absolute;inset-block-start:7px;inset-inline-start:7px;width:11px;height:11px;border:2px solid var(--panel);border-radius:50%;background:#ff4d61}
+.add-button{width:48px;height:48px;font-size:25px}
+.day-context>div strong{font-size:16px}
+.day-context>div span{font-size:15px}
+.week-badge{font-size:13px}
+.day-option{min-height:50px}
+.day-option span{font-size:15px}
+.day-option small{font-size:13px}
+.schedule-list{gap:10px}
+.course-card{min-height:84px;grid-template-columns:94px minmax(0,1fr) auto;gap:5px 11px;padding:12px}
+.course-time{font-size:14px}
+.course-info h3{font-size:16px;line-height:1.5}
+.course-meta{font-size:12px;gap:8px}
+.status-pill{font-size:12px;padding:5px 9px}
+.card-actions{gap:5px}
+.card-action{width:40px;height:40px;border-radius:11px;font-size:18px}
+.empty-state{min-height:70px;font-size:15px}
+.settings-panel summary{padding:16px 2px;font-size:15px}
+.settings-form label,.field-label{font-size:14px}
+.settings-form input,.settings-form select,.field-label input,.field-label select{height:48px;font-size:16px}
+.primary-button,.secondary-button{min-height:48px;padding-inline:16px;font-size:15px}
+.icon-button{width:48px;height:48px;font-size:22px}
+.menu-drawer{position:fixed;inset-block:0;inset-inline-start:0;margin:0;width:min(88vw,360px);height:100dvh;max-height:100dvh;padding:22px 18px max(22px,env(safe-area-inset-bottom));border:1px solid var(--line);border-radius:18px 0 0 18px;background:var(--bg);color:var(--text);box-shadow:0 0 40px #0009}
+.menu-drawer::backdrop{background:#0009;backdrop-filter:blur(2px)}
+.menu-drawer[open]{display:flex;flex-direction:column;gap:10px}
+.menu-drawer .dialog-heading{margin-bottom:8px}
+.menu-action{min-height:52px;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);text-align:right;font:inherit;font-size:16px;cursor:pointer;touch-action:manipulation}
+.menu-action:active{background:var(--panel-2)}
+.menu-drawer .settings-panel{margin-top:4px}
+.menu-drawer .app-footer{margin-top:auto;font-size:12px}
+@media(max-width:370px){.brand{font-size:15px}.course-card{grid-template-columns:80px minmax(0,1fr) auto;padding:10px}.course-time{font-size:13px}.course-info h3{font-size:15px}.card-action{width:36px;height:36px}}

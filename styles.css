@@ -45,3 +45,20 @@ body{font-size:16px}
 .menu-drawer .settings-panel{margin-top:4px}
 .menu-drawer .app-footer{margin-top:auto;font-size:12px}
 @media(max-width:370px){.brand{font-size:15px}.course-card{grid-template-columns:80px minmax(0,1fr) auto;padding:10px}.course-time{font-size:13px}.course-info h3{font-size:15px}.card-action{width:36px;height:36px}}
+.app-page[hidden]{display:none!important}
+.page-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 16px}
+.page-heading h1,.settings-page h1{margin:0;font-size:20px}
+.page-heading .primary-button{flex:none}
+.editable-card{grid-template-rows:auto auto;min-height:76px}
+.editable-card .card-actions{align-self:center}
+.editable-card .course-meta{grid-column:2;grid-row:2}
+.settings-page{padding-top:8px}
+.settings-page h1{margin-bottom:16px}
+.settings-page .settings-panel{margin:0 0 18px;border:1px solid var(--line);border-radius:13px;background:var(--panel);padding:0 12px}
+.settings-page .settings-panel summary{color:var(--text)}
+.settings-page .settings-form{grid-template-columns:1fr;gap:12px;padding-bottom:14px}
+.settings-actions{display:grid;gap:10px}
+.menu-drawer .menu-action{width:100%;text-align:right}
+.menu-drawer .page-link.active{border-color:var(--purple);background:var(--panel-2);color:var(--purple-soft)}
+.delete-course-button{width:100%;min-height:48px;margin-top:12px;border:1px solid #572b38;border-radius:11px;background:#29131b;color:#ff9ca6;font:inherit;font-size:15px;font-weight:700;cursor:pointer;touch-action:manipulation}
+.delete-course-button[hidden]{display:none}

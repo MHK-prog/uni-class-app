@@ -15,44 +15,56 @@
     <header class="topbar">
       <a class="brand" href="./" aria-label="برنامهٔ کلاس‌ها"><strong>کلاس‌های من</strong></a>
       <div class="top-actions">
-        <button class="primary-button add-button" id="add-course-button" type="button" aria-label="افزودن درس">＋</button>
         <button class="menu-button" id="menu-button" type="button" aria-label="باز کردن منو" aria-haspopup="dialog" aria-controls="menu-drawer"><span aria-hidden="true">☰</span><i class="incomplete-indicator" aria-hidden="true" hidden></i></button>
       </div>
     </header>
 
-    <section class="day-context" aria-label="زمان و هفته">
-      <div><strong id="selected-date">—</strong><span id="iran-clock">—</span></div>
-      <span class="week-badge">هفتهٔ <strong id="week-parity">—</strong></span>
+    <section class="app-page" id="page-dashboard" data-page-panel="dashboard" aria-label="برنامه">
+      <section class="day-context" aria-label="زمان و هفته">
+        <div><strong id="selected-date">—</strong><span id="iran-clock">—</span></div>
+        <span class="week-badge">هفتهٔ <strong id="week-parity">—</strong></span>
+      </section>
+      <nav class="day-switch" aria-label="انتخاب روز">
+        <button type="button" class="day-option active" data-day="today" aria-pressed="true"><span>امروز</span><small id="today-name">—</small></button>
+        <button type="button" class="day-option" data-day="tomorrow" aria-pressed="false"><span>فردا</span><small id="tomorrow-name">—</small></button>
+      </nav>
+      <section class="schedule-section" aria-label="برنامهٔ کلاس‌ها">
+        <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
+        <div id="empty-state" class="empty-state" hidden><p id="empty-title">امروز کلاسی ندارید</p></div>
+      </section>
+      <footer class="app-footer">نسخهٔ <span id="app-version">1.3.0</span></footer>
     </section>
 
-    <nav class="day-switch" aria-label="انتخاب روز">
-      <button type="button" class="day-option active" data-day="today" aria-pressed="true"><span>امروز</span><small id="today-name">—</small></button>
-      <button type="button" class="day-option" data-day="tomorrow" aria-pressed="false"><span>فردا</span><small id="tomorrow-name">—</small></button>
-    </nav>
+    <section class="app-page" id="page-courses" data-page-panel="courses" hidden>
+      <div class="page-heading"><h1>درس‌ها</h1><button class="primary-button" id="add-course-button" type="button">＋ افزودن درس</button></div>
+      <div id="manage-course-list" class="schedule-list"></div>
+      <div id="manage-empty" class="empty-state" hidden><p>هنوز درسی اضافه نکرده‌اید.</p></div>
+    </section>
 
-    <section class="schedule-section" aria-labelledby="schedule-heading">
-      <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
-      <div id="empty-state" class="empty-state" hidden>
-        <p id="empty-title">امروز کلاسی ندارید</p>
+    <section class="app-page settings-page" id="page-settings" data-page-panel="settings" hidden>
+      <h1>تنظیمات</h1>
+      <details class="settings-panel" open>
+        <summary>هفتهٔ زوج و فرد</summary>
+        <form id="week-settings-form" class="settings-form">
+          <label>شنبهٔ مبنا<input id="anchor-date" type="date" min="2026-10-03" step="7" required></label>
+          <label>هفتهٔ مبنا<select id="anchor-parity"><option value="even">زوج</option><option value="odd">فرد</option></select></label>
+          <button class="secondary-button" type="submit">ذخیره</button>
+        </form>
+      </details>
+      <div class="settings-actions">
+        <button class="menu-action" id="import-button" type="button">ورود برنامه</button>
+        <button class="menu-action" id="export-button" type="button">ذخیرهٔ پشتیبان</button>
       </div>
     </section>
-    <footer class="app-footer"><span id="app-version">1.2.0</span></footer>
   </main>
 
   <input id="import-file" type="file" accept="application/json,.json" hidden>
   <dialog id="menu-drawer" class="menu-drawer" aria-label="منو">
     <div class="dialog-heading"><h2>منو</h2><button type="button" class="icon-button close-menu" aria-label="بستن منو">×</button></div>
-    <button class="menu-action" id="import-button" type="button">ورود برنامه</button>
-    <button class="menu-action" id="export-button" type="button">ذخیرهٔ پشتیبان</button>
-    <details class="settings-panel">
-      <summary aria-label="تنظیم هفتهٔ زوج و فرد">تنظیم هفته</summary>
-      <form id="week-settings-form" class="settings-form">
-        <label>شنبهٔ مبنا<input id="anchor-date" type="date" min="2026-10-03" step="7" required></label>
-        <label>هفتهٔ مبنا<select id="anchor-parity"><option value="even">زوج</option><option value="odd">فرد</option></select></label>
-        <button class="secondary-button" type="submit">ذخیره</button>
-      </form>
-    </details>
-    <footer class="app-footer">نسخهٔ <span>1.2.0</span></footer>
+    <button class="menu-action page-link active" type="button" data-page="dashboard">برنامه</button>
+    <button class="menu-action page-link" type="button" data-page="courses">مدیریت درس‌ها</button>
+    <button class="menu-action page-link" type="button" data-page="settings">تنظیمات</button>
+    <footer class="app-footer">نسخهٔ <span>1.3.0</span></footer>
   </dialog>
   <dialog id="course-dialog" class="course-dialog">
     <form id="course-form" novalidate>
@@ -70,6 +82,7 @@
       <label class="field-label">کلاس<input name="room" id="course-room" maxlength="50" placeholder="اختیاری"></label>
       <p id="form-error" class="form-error" role="alert" hidden></p>
       <div class="dialog-actions"><button type="button" class="secondary-button cancel-dialog">لغو</button><button type="submit" class="primary-button">ذخیره</button></div>
+      <button type="button" class="delete-course-button" id="delete-course-button" hidden>حذف درس</button>
     </form>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

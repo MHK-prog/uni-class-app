@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DEFAULT_SETTINGS = { anchorDate: '2026-10-03', anchorParity: 'even' };
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
@@ -122,35 +122,42 @@ function render(now = new Date()) {
   $('#today-name').textContent = today.weekday; $('#tomorrow-name').textContent = tomorrow.weekday;
   $('#week-parity').textContent = info.parity === 'even' ? 'زوج' : 'فرد';
   $('#app-version').textContent = APP_VERSION;
-  $('#empty-title').textContent = selectedDay === 'today' ? 'امروز کلاسی ندارید' : 'فردا کلاسی ندارید';
   const matching = state.courses.filter(course => course.day && course.start && course.end && course.day === info.weekday && (course.week === 'weekly' || course.week === info.parity)).sort((a, b) => a.start.localeCompare(b.start));
-  const rendered = matching.map(course => ({ course, status: statusFor(course, info.currentMinutes, info.isToday, info.parity) }));
+  const rendered = matching.map(course => ({ course, status: statusFor(course, info.currentMinutes, info.isToday, info.parity) })).filter(item => !(info.isToday && item.status === 'done'));
+  $('#empty-title').textContent = selectedDay === 'tomorrow' ? 'فردا کلاسی ندارید' : matching.length ? 'کلاس‌های امروز تمام شده‌اند' : 'امروز کلاسی ندارید';
   const list = $('#schedule-list');
   list.replaceChildren(...rendered.map(item => createCourseCard(item.course, item.status)));
   $('#empty-state').hidden = rendered.length !== 0; list.hidden = rendered.length === 0;
+  const byDay = [...state.courses].sort((a, b) => (DAYS.indexOf(a.day) - DAYS.indexOf(b.day)) || a.start.localeCompare(b.start) || a.title.localeCompare(b.title, 'fa'));
+  $('#manage-course-list').replaceChildren(...byDay.map(course => createCourseCard(course, !course.day || !course.start || !course.end ? 'incomplete' : 'upcoming', true)));
+  $('#manage-empty').hidden = byDay.length !== 0;
   const hasIncomplete = state.courses.some(course => !course.day || !course.start || !course.end);
   const indicator = $('.incomplete-indicator');
   indicator.hidden = !hasIncomplete;
   $('#menu-button').setAttribute('aria-label', hasIncomplete ? 'باز کردن منو؛ درس ناقص دارید' : 'باز کردن منو');
 }
 
-function createCourseCard(course, status) {
+function createCourseCard(course, status, editable = false) {
   const article = document.createElement('article');
-  article.className = `course-card status-${status} ${status === 'incomplete' ? 'incomplete' : ''} has-actions`;
+  article.className = `course-card status-${status} ${status === 'incomplete' ? 'incomplete' : ''} ${editable ? 'editable-card' : ''}`;
   const time = document.createElement('div'); time.className = 'course-time';
   time.textContent = status === 'incomplete' ? '—' : `${displayTime(course.start)} – ${displayTime(course.end)}`;
   const info = document.createElement('div'); info.className = 'course-info';
   const title = document.createElement('h3'); title.textContent = course.title; info.append(title);
   const meta = document.createElement('div'); meta.className = 'course-meta';
+  if (editable) { const day = document.createElement('span'); day.className = 'meta-chip'; day.textContent = course.day || 'روز نامشخص'; meta.append(day); }
   const week = document.createElement('span'); week.className = 'meta-chip'; week.textContent = WEEK_LABELS[course.week] || WEEK_LABELS.weekly; meta.append(week);
   if (course.room) { const room = document.createElement('span'); room.className = 'meta-chip'; room.textContent = `کلاس ${course.room}`; meta.append(room); }
-  if (status === 'incomplete') { const note = document.createElement('span'); note.className = 'meta-chip'; note.textContent = 'روز یا ساعت ثبت نشده'; meta.append(note); }
   info.append(meta);
-  const pill = document.createElement('span'); pill.className = 'status-pill'; pill.textContent = status === 'incomplete' ? 'برنامه ناقص' : STATUS_LABELS[status];
-  const actions = document.createElement('div'); actions.className = 'card-actions';
-  const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'card-action'; edit.textContent = '✎'; edit.title = 'ویرایش درس'; edit.setAttribute('aria-label', `ویرایش ${course.title}`); edit.addEventListener('click', () => openCourseDialog(course));
-  const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'card-action delete'; remove.textContent = '×'; remove.title = 'حذف درس'; remove.setAttribute('aria-label', `حذف ${course.title}`); remove.addEventListener('click', () => removeCourse(course.id));
-  actions.append(edit, remove); article.append(time, info, pill, actions); return article;
+  if (editable) {
+    const actions = document.createElement('div'); actions.className = 'card-actions';
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'card-action'; edit.textContent = '✎'; edit.title = 'ویرایش درس'; edit.setAttribute('aria-label', `ویرایش ${course.title}`); edit.addEventListener('click', () => openCourseDialog(course));
+    actions.append(edit); article.append(time, info, actions);
+  } else {
+    const pill = document.createElement('span'); pill.className = 'status-pill'; pill.textContent = STATUS_LABELS[status];
+    article.append(time, info, pill);
+  }
+  return article;
 }
 
 function openCourseDialog(course = null) {
@@ -159,13 +166,14 @@ function openCourseDialog(course = null) {
   $('#course-id').value = course?.id || ''; $('#course-title').value = course?.title || '';
   $('#course-day').value = course?.day || ''; $('#course-week').value = course?.week || 'weekly';
   $('#course-start').value = course?.start || ''; $('#course-end').value = course?.end || ''; $('#course-room').value = course?.room || '';
+  $('#delete-course-button').hidden = !course;
   $('#course-dialog').showModal(); $('#course-title').focus();
 }
 
 function removeCourse(id) {
   const course = state.courses.find(item => item.id === id);
   if (!course || !window.confirm(`درس «${course.title}» حذف شود؟`)) return;
-  state.courses = state.courses.filter(item => item.id !== id); saveState(); render(); showToast('درس حذف شد.');
+  state.courses = state.courses.filter(item => item.id !== id); saveState(); $('#course-dialog').close(); render(); showToast('درس حذف شد.');
 }
 
 function showToast(message) {
@@ -203,11 +211,18 @@ function init() {
   $('#add-course-button').addEventListener('click', () => openCourseDialog());
   $('#menu-button').addEventListener('click', () => $('#menu-drawer').showModal());
   $('.close-menu').addEventListener('click', () => $('#menu-drawer').close());
-  $('#import-button').addEventListener('click', () => { $('#menu-drawer').close(); $('#import-file').click(); });
-  $('#export-button').addEventListener('click', () => { $('#menu-drawer').close(); exportSchedule(); });
+  document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => {
+    const destination = button.dataset.page;
+    document.querySelectorAll('[data-page-panel]').forEach(panel => { panel.hidden = panel.dataset.pagePanel !== destination; });
+    document.querySelectorAll('.page-link').forEach(link => link.classList.toggle('active', link === button));
+    $('#menu-drawer').close();
+  }));
+  $('#import-button').addEventListener('click', () => $('#import-file').click());
+  $('#export-button').addEventListener('click', exportSchedule);
   $('#import-file').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) importSchedule(file); });
   $('.close-dialog').addEventListener('click', () => $('#course-dialog').close());
   $('.cancel-dialog').addEventListener('click', () => $('#course-dialog').close());
+  $('#delete-course-button').addEventListener('click', () => removeCourse($('#course-id').value));
   $('#course-form').addEventListener('submit', event => {
     event.preventDefault(); const values = new FormData(event.currentTarget);
     const title = String(values.get('title') || '').trim(), day = String(values.get('day') || '');

@@ -1,0 +1,3 @@
+﻿# Private personal schedules — do not publish these files.
+*.private.json
+personal-schedule.json

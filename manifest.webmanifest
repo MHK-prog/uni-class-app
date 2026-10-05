@@ -1,0 +1,13 @@
+{
+  "name": "برنامه کلاس‌های من",
+  "short_name": "کلاس‌ها",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#09080d",
+  "theme_color": "#09080d",
+  "description": "برنامه کلاس‌ها با وضعیت زنده و زمان ایران",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

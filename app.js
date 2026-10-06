@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DEFAULT_SETTINGS = { anchorDate: '2026-10-03', anchorParity: 'even' };
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
@@ -212,18 +212,20 @@ function init() {
   $('#menu-button').addEventListener('click', () => { if (!$('#menu-drawer').open) $('#menu-drawer').showModal(); });
   $('.close-menu').addEventListener('click', () => $('#menu-drawer').close());
   $('#menu-drawer').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
+  $('#course-dialog').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
   let horizontalGesture = null;
   document.addEventListener('touchstart', event => {
     if (event.touches.length !== 1) { horizontalGesture = null; return; }
-    const touch = event.touches[0], drawer = $('#menu-drawer'), edgeZone = window.innerWidth - touch.clientX <= 28;
+    const touch = event.touches[0], drawer = $('#menu-drawer');
+    const onPageSwipeSurface = event.target.closest('.app-shell') && !event.target.closest('button,a,input,select,textarea,.day-switch');
     horizontalGesture = drawer.open ? (drawer.contains(event.target) ? { x: touch.clientX, y: touch.clientY, open: true } : null)
-      : edgeZone ? { x: touch.clientX, y: touch.clientY, open: false } : null;
+      : onPageSwipeSurface ? { x: touch.clientX, y: touch.clientY, open: false } : null;
   }, { passive: true });
   document.addEventListener('touchend', event => {
     if (!horizontalGesture) return;
     const touch = event.changedTouches[0], dx = touch.clientX - horizontalGesture.x, dy = Math.abs(touch.clientY - horizontalGesture.y);
-    if (dy < 80 && !horizontalGesture.open && dx < -70) $('#menu-drawer').showModal();
-    else if (dy < 80 && horizontalGesture.open && dx > 70) $('#menu-drawer').close();
+    if (dy < 90 && Math.abs(dx) > dy * 1.2 && !horizontalGesture.open && dx < -55) $('#menu-drawer').showModal();
+    else if (dy < 90 && Math.abs(dx) > dy * 1.2 && horizontalGesture.open && dx > 55) $('#menu-drawer').close();
     horizontalGesture = null;
   }, { passive: true });
   document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => {

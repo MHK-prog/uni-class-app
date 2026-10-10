@@ -23,7 +23,7 @@
     <section class="app-page" id="page-dashboard" data-page-panel="dashboard" aria-label="برنامه">
       <section class="day-context" aria-label="زمان و هفته">
         <div><strong id="selected-date">—</strong><span id="iran-clock">—</span></div>
-        <span class="week-badge">هفتهٔ <strong id="week-parity">—</strong></span>
+        <span class="week-badge"><strong id="cycle-week-label">—</strong></span>
       </section>
       <nav class="day-switch" aria-label="انتخاب روز">
         <button type="button" class="day-option active" data-day="today" aria-pressed="true"><span>امروز</span><small id="today-name">—</small></button>
@@ -33,7 +33,7 @@
         <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
         <div id="empty-state" class="empty-state" hidden><p id="empty-title">امروز کلاسی ندارید</p></div>
       </section>
-      <footer class="app-footer">نسخهٔ <span id="app-version">1.6.0</span></footer>
+      <footer class="app-footer">نسخهٔ <span id="app-version">1.7.0</span></footer>
     </section>
 
     <section class="app-page" id="page-courses" data-page-panel="courses" hidden>
@@ -44,14 +44,6 @@
 
     <section class="app-page settings-page" id="page-settings" data-page-panel="settings" hidden>
       <h1>تنظیمات</h1>
-      <details class="settings-panel" open>
-        <summary>هفتهٔ زوج و فرد</summary>
-        <form id="week-settings-form" class="settings-form">
-          <label>شنبهٔ مبنا<input id="anchor-date" type="date" min="2026-10-03" step="7" required></label>
-          <label>هفتهٔ مبنا<select id="anchor-parity"><option value="even">زوج</option><option value="odd">فرد</option></select></label>
-          <button class="secondary-button" type="submit">ذخیره</button>
-        </form>
-      </details>
       <div class="settings-actions">
         <button class="menu-action" id="import-button" type="button">ورود برنامه</button>
         <button class="menu-action" id="export-button" type="button">ذخیرهٔ پشتیبان</button>
@@ -65,16 +57,17 @@
     <button class="menu-action page-link active" type="button" data-page="dashboard">برنامه</button>
     <button class="menu-action page-link" type="button" data-page="courses">مدیریت درس‌ها</button>
     <button class="menu-action page-link" type="button" data-page="settings">تنظیمات</button>
-    <footer class="app-footer">نسخهٔ <span>1.6.0</span></footer>
+    <footer class="app-footer">نسخهٔ <span>1.7.0</span></footer>
   </dialog>
   <dialog id="course-dialog" class="course-dialog">
     <form id="course-form" novalidate>
       <div class="dialog-heading"><h2 id="dialog-title">افزودن درس</h2><button type="button" class="icon-button close-dialog" aria-label="بستن">×</button></div>
       <input id="course-id" name="id" type="hidden">
       <label class="field-label">نام درس<input name="title" id="course-title" maxlength="80" required placeholder="نام درس"></label>
-      <div class="field-row">
-        <label class="field-label">روز<select name="day" id="course-day"><option value="">روز</option></select></label>
-        <label class="field-label">هفته<select name="week" id="course-week"><option value="weekly">هر هفته</option><option value="even">زوج</option><option value="odd">فرد</option></select></label>
+      <div class="field-label schedule-picker">
+        <span>روزهای برگزاری</span>
+        <div class="week-day-row"><span class="week-row-label">هفتهٔ اول</span><div class="day-circles" id="week-one-days" data-week-index="0"></div></div>
+        <div class="week-day-row"><span class="week-row-label">هفتهٔ دوم</span><div class="day-circles" id="week-two-days" data-week-index="1"></div></div>
       </div>
       <div class="field-row">
         <label class="field-label">شروع<input name="start" id="course-start" type="time"></label>

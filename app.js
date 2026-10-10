@@ -2,49 +2,82 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 const STORAGE_KEY = 'class-schedule-app-v1';
-const DEFAULT_SETTINGS = { anchorDate: '2026-10-03', anchorParity: 'even' };
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
-const WEEK_LABELS = { weekly: 'هر هفته', even: 'هفتهٔ زوج', odd: 'هفتهٔ فرد' };
+const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
+const WEEK_DAY_SHORT = { شنبه: 'ش', یکشنبه: 'ی', دوشنبه: 'د', 'سه‌شنبه': 'س', 'چهارشنبه': 'چ', پنجشنبه: 'پ', جمعه: 'ج' };
+const LEGACY_DEFAULT_ANCHOR = '2026-10-03';
+const DEFAULT_CYCLE = { anchorDate: currentSaturdayISO() };
 const STATUS_LABELS = { upcoming: 'در پیش', live: 'در حال برگزاری', done: 'تمام‌شده' };
 const numberFa = new Intl.NumberFormat('fa-IR');
 const $ = selector => document.querySelector(selector);
 let state = loadState();
 let selectedDay = 'today';
+let selectedDaysByWeek = [[], []];
 let toastTimer;
 
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    if (saved && Array.isArray(saved.courses)) return { settings: normalizeSettings(saved.settings), courses: normalizeCourses(saved.courses) };
+    if (saved && Array.isArray(saved.courses)) {
+      const oldSettings = normalizeLegacySettings(saved.settings);
+      return { cycle: normalizeCycle(saved.cycle, oldSettings), courses: normalizeCourses(saved.courses, oldSettings) };
+    }
   } catch (error) { console.warn('Could not load saved schedule.', error); }
-  return { settings: { ...DEFAULT_SETTINGS }, courses: [] };
+  return { cycle: { ...DEFAULT_CYCLE }, courses: [] };
 }
 
-function normalizeSettings(input = {}) {
+function normalizeLegacySettings(input = {}) {
+  if (!input || typeof input !== 'object') input = {};
   const date = input.anchorDate || '';
   const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(`${date}T12:00:00Z`));
-  return { anchorDate: validDate ? date : DEFAULT_SETTINGS.anchorDate, anchorParity: input.anchorParity === 'odd' ? 'odd' : 'even' };
+  return { anchorDate: validDate ? date : LEGACY_DEFAULT_ANCHOR, anchorParity: input.anchorParity === 'odd' ? 'odd' : 'even' };
+}
+
+function normalizeCycle(input = {}, oldSettings = normalizeLegacySettings()) {
+  if (!input || typeof input !== 'object') input = {};
+  const date = input.anchorDate || oldSettings.anchorDate || DEFAULT_CYCLE.anchorDate;
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(`${date}T12:00:00Z`));
+  return { anchorDate: validDate ? date : DEFAULT_CYCLE.anchorDate };
 }
 
 function validTime(value) { return typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value); }
 function makeId(seed = '') { return globalThis.crypto?.randomUUID?.() || `course-${Date.now()}-${seed}-${Math.random().toString(36).slice(2, 8)}`; }
 
-function normalizeCourses(items) {
+function normalizeDaysByWeek(raw, oldSettings) {
+  const rawRows = raw.daysByWeek;
+  if (Array.isArray(rawRows)) {
+    return [0, 1].map(index => [...new Set((Array.isArray(rawRows[index]) ? rawRows[index] : []).filter(day => WEEK_DAY_ORDER.includes(day)))].sort((a, b) => WEEK_DAY_ORDER.indexOf(a) - WEEK_DAY_ORDER.indexOf(b)));
+  }
+  if (rawRows && typeof rawRows === 'object') {
+    const first = rawRows.first || rawRows.week1 || [];
+    const second = rawRows.second || rawRows.week2 || [];
+    return [first, second].map(row => [...new Set((Array.isArray(row) ? row : []).filter(day => WEEK_DAY_ORDER.includes(day)))].sort((a, b) => WEEK_DAY_ORDER.indexOf(a) - WEEK_DAY_ORDER.indexOf(b)));
+  }
+
+  // Migrate the previous one-day/weekly-or-parity format into the two-week cycle.
+  const day = WEEK_DAY_ORDER.includes(raw.day) ? raw.day : '';
+  if (!day) return [[], []];
+  const oldWeek = String(raw.week || '');
+  let week = ['هفته زوج', 'هفتهٔ زوج', 'زوج'].includes(oldWeek) ? 'even'
+    : ['هفته فرد', 'هفتهٔ فرد', 'فرد'].includes(oldWeek) ? 'odd' : oldWeek;
+  if (!['weekly', 'even', 'odd'].includes(week)) week = 'weekly';
+  if (week === 'weekly' || !week) return [[day], [day]];
+  const firstParity = oldSettings.anchorParity;
+  return week === firstParity ? [[day], []] : [[], [day]];
+}
+
+function normalizeCourses(items, oldSettings = normalizeLegacySettings()) {
   return items.map((raw, index) => {
     const title = String(raw.title || raw.name || '').trim().slice(0, 80);
     if (!title) return null;
-    let week = raw.week;
-    if (week === 'هفته زوج' || week === 'زوج') week = 'even';
-    else if (week === 'هفته فرد' || week === 'فرد') week = 'odd';
-    else if (!['weekly', 'even', 'odd'].includes(week)) week = 'weekly';
     return {
       id: String(raw.id || makeId(index)), title,
-      day: DAYS.includes(raw.day) ? raw.day : '',
+      daysByWeek: normalizeDaysByWeek(raw, oldSettings),
       start: validTime(raw.start) ? raw.start : '',
       end: validTime(raw.end) ? raw.end : '',
-      week, room: String(raw.room || '').trim().slice(0, 50)
+      room: String(raw.room || '').trim().slice(0, 50)
     };
   }).filter(Boolean);
 }
@@ -81,21 +114,56 @@ function saturdayOnOrBefore(dateString) {
   return date;
 }
 
-function parityFor(dateString) {
-  const anchor = saturdayOnOrBefore(state.settings.anchorDate);
+function cycleWeekIndex(dateString) {
+  const anchor = saturdayOnOrBefore(state.cycle.anchorDate);
   const target = saturdayOnOrBefore(dateString);
   const weeks = Math.floor((target.getTime() - anchor.getTime()) / (7 * 86400000));
-  const sameParity = Math.abs(weeks % 2) === 0;
-  const even = state.settings.anchorParity === 'even' ? sameParity : !sameParity;
-  return even ? 'even' : 'odd';
+  return ((weeks % 2) + 2) % 2;
 }
 
 function toFaDigits(value) { return String(value).replace(/[0-9]/g, digit => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]); }
 function displayTime(value) { return value ? toFaDigits(value) : '—'; }
 
-function statusFor(course, currentMinutes, isToday, selectedParity) {
-  if (!course.day || !course.start || !course.end) return 'incomplete';
-  if (course.week !== 'weekly' && course.week !== selectedParity) return 'excluded';
+function formatDaysByWeek(daysByWeek = [[], []]) {
+  return daysByWeek.map((days, index) => {
+    const initials = WEEK_DAY_ORDER.filter(day => days.includes(day)).map(day => WEEK_DAY_SHORT[day]).join('، ') || '—';
+    return `${index === 0 ? '۱' : '۲'}: ${initials}`;
+  }).join('  |  ');
+}
+
+function currentSaturdayISO(now = new Date()) {
+  const p = iranParts(now), date = new Date(Date.UTC(p.year, p.month - 1, p.day, 12));
+  date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 1) % 7);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function syncDayPickers() {
+  document.querySelectorAll('.day-circle').forEach(button => {
+    const weekIndex = Number(button.dataset.weekIndex), active = selectedDaysByWeek[weekIndex].includes(button.dataset.day);
+    button.classList.toggle('selected', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+}
+
+function initDayPickers() {
+  document.querySelectorAll('.day-circles').forEach(row => {
+    const weekIndex = Number(row.dataset.weekIndex);
+    WEEK_DAY_ORDER.forEach(day => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'day-circle'; button.dataset.day = day; button.dataset.weekIndex = String(weekIndex);
+      button.textContent = WEEK_DAY_SHORT[day]; button.title = day; button.setAttribute('aria-label', `${weekIndex === 0 ? 'هفتهٔ اول' : 'هفتهٔ دوم'}، ${day}`); button.setAttribute('aria-pressed', 'false');
+      button.addEventListener('click', () => {
+        const selected = selectedDaysByWeek[weekIndex];
+        selectedDaysByWeek[weekIndex] = selected.includes(day) ? selected.filter(item => item !== day) : [...selected, day];
+        syncDayPickers();
+      });
+      row.append(button);
+    });
+  });
+}
+
+function statusFor(course, currentMinutes, isToday) {
+  if (!course.daysByWeek?.some(days => days.length) || !course.start || !course.end) return 'incomplete';
   if (!isToday) return 'upcoming';
   const [startHour, startMinute] = course.start.split(':').map(Number);
   const [endHour, endMinute] = course.end.split(':').map(Number);
@@ -107,12 +175,7 @@ function statusFor(course, currentMinutes, isToday, selectedParity) {
 function selectedInfo(now = new Date()) {
   const offset = selectedDay === 'tomorrow' ? 1 : 0;
   const date = targetDay(offset, now), current = iranParts(now);
-  return { ...date, isToday: offset === 0, currentMinutes: current.hour * 60 + current.minute, parity: parityFor(date.iso) };
-}
-
-function syncSettingsForm() {
-  $('#anchor-date').value = state.settings.anchorDate;
-  $('#anchor-parity').value = state.settings.anchorParity;
+  return { ...date, isToday: offset === 0, currentMinutes: current.hour * 60 + current.minute, weekIndex: cycleWeekIndex(date.iso) };
 }
 
 function render(now = new Date()) {
@@ -120,18 +183,18 @@ function render(now = new Date()) {
   $('#iran-clock').textContent = toFaDigits(`${String(current.hour).padStart(2, '0')}:${String(current.minute).padStart(2, '0')}`);
   $('#selected-date').textContent = info.formatted;
   $('#today-name').textContent = today.weekday; $('#tomorrow-name').textContent = tomorrow.weekday;
-  $('#week-parity').textContent = info.parity === 'even' ? 'زوج' : 'فرد';
+  $('#cycle-week-label').textContent = info.weekIndex === 0 ? 'هفتهٔ اول' : 'هفتهٔ دوم';
   $('#app-version').textContent = APP_VERSION;
-  const matching = state.courses.filter(course => course.day && course.start && course.end && course.day === info.weekday && (course.week === 'weekly' || course.week === info.parity)).sort((a, b) => a.start.localeCompare(b.start));
-  const rendered = matching.map(course => ({ course, status: statusFor(course, info.currentMinutes, info.isToday, info.parity) })).filter(item => !(info.isToday && item.status === 'done'));
+  const matching = state.courses.filter(course => course.daysByWeek?.[info.weekIndex]?.includes(info.weekday) && course.start && course.end).sort((a, b) => a.start.localeCompare(b.start));
+  const rendered = matching.map(course => ({ course, status: statusFor(course, info.currentMinutes, info.isToday) })).filter(item => !(info.isToday && item.status === 'done'));
   $('#empty-title').textContent = selectedDay === 'tomorrow' ? 'فردا کلاسی ندارید' : matching.length ? 'کلاس‌های امروز تمام شده‌اند' : 'امروز کلاسی ندارید';
   const list = $('#schedule-list');
   list.replaceChildren(...rendered.map(item => createCourseCard(item.course, item.status)));
   $('#empty-state').hidden = rendered.length !== 0; list.hidden = rendered.length === 0;
-  const byDay = [...state.courses].sort((a, b) => (DAYS.indexOf(a.day) - DAYS.indexOf(b.day)) || a.start.localeCompare(b.start) || a.title.localeCompare(b.title, 'fa'));
-  $('#manage-course-list').replaceChildren(...byDay.map(course => createCourseCard(course, !course.day || !course.start || !course.end ? 'incomplete' : 'upcoming', true)));
+  const byDay = [...state.courses].sort((a, b) => a.start.localeCompare(b.start) || a.title.localeCompare(b.title, 'fa'));
+  $('#manage-course-list').replaceChildren(...byDay.map(course => createCourseCard(course, !course.daysByWeek.some(days => days.length) || !course.start || !course.end ? 'incomplete' : 'upcoming', true)));
   $('#manage-empty').hidden = byDay.length !== 0;
-  const hasIncomplete = state.courses.some(course => !course.day || !course.start || !course.end);
+  const hasIncomplete = state.courses.some(course => !course.daysByWeek.some(days => days.length) || !course.start || !course.end);
   const indicator = $('.incomplete-indicator');
   indicator.hidden = !hasIncomplete;
   $('#menu-button').setAttribute('aria-label', hasIncomplete ? 'باز کردن منو؛ درس ناقص دارید' : 'باز کردن منو');
@@ -145,8 +208,7 @@ function createCourseCard(course, status, editable = false) {
   const info = document.createElement('div'); info.className = 'course-info';
   const title = document.createElement('h3'); title.textContent = course.title; info.append(title);
   const meta = document.createElement('div'); meta.className = 'course-meta';
-  if (editable) { const day = document.createElement('span'); day.className = 'meta-chip'; day.textContent = course.day || 'روز نامشخص'; meta.append(day); }
-  const week = document.createElement('span'); week.className = 'meta-chip'; week.textContent = WEEK_LABELS[course.week] || WEEK_LABELS.weekly; meta.append(week);
+  if (editable) { const days = document.createElement('span'); days.className = 'meta-chip recurrence-summary'; days.textContent = formatDaysByWeek(course.daysByWeek); meta.append(days); }
   if (course.room) { const room = document.createElement('span'); room.className = 'meta-chip'; room.textContent = `کلاس ${course.room}`; meta.append(room); }
   info.append(meta);
   if (editable) {
@@ -164,7 +226,8 @@ function openCourseDialog(course = null) {
   const form = $('#course-form'); form.reset(); $('#form-error').hidden = true;
   $('#dialog-title').textContent = course ? 'ویرایش درس' : 'افزودن درس';
   $('#course-id').value = course?.id || ''; $('#course-title').value = course?.title || '';
-  $('#course-day').value = course?.day || ''; $('#course-week').value = course?.week || 'weekly';
+  selectedDaysByWeek = course ? course.daysByWeek.map(days => [...days]) : [[], []];
+  syncDayPickers();
   $('#course-start').value = course?.start || ''; $('#course-end').value = course?.end || ''; $('#course-room').value = course?.room || '';
   $('#delete-course-button').hidden = !course;
   $('#course-dialog').showModal(); $('#course-title').focus();
@@ -182,7 +245,7 @@ function showToast(message) {
 }
 
 function exportSchedule() {
-  const payload = JSON.stringify({ formatVersion: 1, settings: state.settings, courses: state.courses }, null, 2);
+  const payload = JSON.stringify({ formatVersion: 2, cycle: state.cycle, courses: state.courses }, null, 2);
   const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url; link.download = 'class-schedule.json'; link.click(); URL.revokeObjectURL(url);
   showToast('نسخهٔ پشتیبان برنامه دانلود شد.');
@@ -192,17 +255,19 @@ async function importSchedule(file) {
   try {
     const parsed = JSON.parse((await file.text()).replace(/^\uFEFF/, ''));
     if (!parsed || !Array.isArray(parsed.courses)) throw new Error('ساختار فایل درست نیست.');
-    const courses = normalizeCourses(parsed.courses);
+    const oldSettings = normalizeLegacySettings(parsed.settings);
+    const cycle = normalizeCycle(parsed.cycle, oldSettings);
+    const courses = normalizeCourses(parsed.courses, oldSettings);
     if (parsed.courses.length && !courses.length) throw new Error('هیچ درس معتبری در فایل پیدا نشد.');
     if (state.courses.length && !window.confirm('برنامهٔ فعلی با اطلاعات فایل جایگزین شود؟')) return;
-    state = { settings: normalizeSettings(parsed.settings), courses }; saveState(); syncSettingsForm(); render();
+    state = { cycle, courses }; saveState(); render();
     showToast(`${numberFa.format(courses.length)} درس وارد شد.`);
   } catch (error) { showToast(`وارد کردن فایل ناموفق بود: ${error.message || 'فایل JSON معتبر نیست.'}`); }
   finally { $('#import-file').value = ''; }
 }
 
 function init() {
-  DAYS.forEach(day => { const option = document.createElement('option'); option.value = day; option.textContent = day; $('#course-day').append(option); });
+  initDayPickers();
   document.querySelectorAll('[data-day]').forEach(button => button.addEventListener('click', () => {
     selectedDay = button.dataset.day;
     document.querySelectorAll('[data-day]').forEach(option => { const active = option === button; option.classList.toggle('active', active); option.setAttribute('aria-pressed', String(active)); });
@@ -242,24 +307,17 @@ function init() {
   $('#delete-course-button').addEventListener('click', () => removeCourse($('#course-id').value));
   $('#course-form').addEventListener('submit', event => {
     event.preventDefault(); const values = new FormData(event.currentTarget);
-    const title = String(values.get('title') || '').trim(), day = String(values.get('day') || '');
+    const title = String(values.get('title') || '').trim();
     const start = String(values.get('start') || ''), end = String(values.get('end') || ''), error = $('#form-error');
     if (!title) { error.textContent = 'نام درس را وارد کنید.'; error.hidden = false; return; }
     if ((start && !end) || (!start && end)) { error.textContent = 'برای ساعت، شروع و پایان را با هم وارد کنید.'; error.hidden = false; return; }
     if (start && end && start >= end) { error.textContent = 'ساعت پایان باید بعد از ساعت شروع باشد.'; error.hidden = false; return; }
-    const id = String(values.get('id') || makeId()), course = { id, title, day, start, end, week: String(values.get('week') || 'weekly'), room: String(values.get('room') || '').trim() };
+    const id = String(values.get('id') || makeId()), course = { id, title, daysByWeek: selectedDaysByWeek.map(days => [...days]), start, end, room: String(values.get('room') || '').trim() };
     const index = state.courses.findIndex(item => item.id === id);
     if (index >= 0) state.courses[index] = course; else state.courses.push(course);
     saveState(); $('#course-dialog').close(); render(); showToast(index >= 0 ? 'تغییرات درس ذخیره شد.' : 'درس اضافه شد.');
   });
-  $('#week-settings-form').addEventListener('submit', event => {
-    event.preventDefault();
-    const pickedDate = new Date(`${$('#anchor-date').value}T12:00:00Z`);
-    if (pickedDate.getUTCDay() !== 6) { showToast('تاریخ مبنا باید شنبه باشد.'); return; }
-    state.settings = normalizeSettings({ anchorDate: $('#anchor-date').value, anchorParity: $('#anchor-parity').value });
-    saveState(); syncSettingsForm(); render(); showToast('مبنای هفته ذخیره شد.');
-  });
-  syncSettingsForm(); render(); setInterval(render, 15000);
+  render(); setInterval(render, 15000);
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Offline support unavailable.', error)));
 }
 

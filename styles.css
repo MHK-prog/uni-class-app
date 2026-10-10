@@ -59,6 +59,13 @@ body{font-size:16px}
 .settings-page .settings-panel summary{color:var(--text)}
 .settings-page .settings-form{grid-template-columns:1fr;gap:12px;padding-bottom:14px}
 .settings-actions{display:grid;gap:10px}
+.schedule-picker{gap:10px}
+.week-day-row{display:grid;gap:5px}
+.week-row-label{color:var(--muted);font-size:13px}
+.day-circles{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.day-circle{width:100%;max-width:42px;aspect-ratio:1;justify-self:center;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--panel-2);color:var(--muted);font:inherit;font-size:14px;font-weight:700;cursor:pointer;touch-action:manipulation;transition:background .15s,color .15s,border-color .15s}
+.day-circle.selected{border-color:var(--purple);background:var(--purple);color:#fff}
+.day-circle:focus-visible{outline:2px solid var(--purple-soft);outline-offset:2px}
 .menu-drawer .menu-action{width:100%;text-align:right}
 .menu-drawer .page-link.active{border-color:var(--purple);background:var(--panel-2);color:var(--purple-soft)}
 .delete-course-button{width:100%;min-height:48px;margin-top:12px;border:1px solid #572b38;border-radius:11px;background:#29131b;color:#ff9ca6;font:inherit;font-size:15px;font-weight:700;cursor:pointer;touch-action:manipulation}

@@ -33,7 +33,7 @@
         <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
         <div id="empty-state" class="empty-state" hidden><p id="empty-title">امروز کلاسی ندارید</p></div>
       </section>
-      <footer class="app-footer">نسخهٔ <span id="app-version">1.7.0</span></footer>
+      <footer class="app-footer">نسخهٔ <span id="app-version">۱.۸.۰</span></footer>
     </section>
 
     <section class="app-page" id="page-courses" data-page-panel="courses" hidden>
@@ -42,8 +42,22 @@
       <div id="manage-empty" class="empty-state" hidden><p>هنوز درسی اضافه نکرده‌اید.</p></div>
     </section>
 
+    <section class="app-page notes-page" id="page-notes" data-page-panel="notes" hidden>
+      <div class="page-heading notes-heading">
+        <button class="secondary-button" id="back-to-courses" type="button">بازگشت</button>
+        <div><h1>یادداشت‌ها</h1><small id="notes-course-name"></small></div>
+        <button class="primary-button" id="add-note-button" type="button">＋ یادداشت</button>
+      </div>
+      <div id="notes-list" class="notes-list"></div>
+      <div id="notes-empty" class="empty-state" hidden><p>یادداشتی ثبت نشده.</p></div>
+    </section>
+
     <section class="app-page settings-page" id="page-settings" data-page-panel="settings" hidden>
       <h1>تنظیمات</h1>
+      <form id="week-parity-form" class="settings-form parity-form">
+        <label>این هفته کدام است؟<select id="current-week-parity"><option value="even">زوج</option><option value="odd">فرد</option></select></label>
+        <button class="secondary-button" type="submit">ذخیرهٔ هفته</button>
+      </form>
       <div class="settings-actions">
         <button class="menu-action" id="import-button" type="button">ورود برنامه</button>
         <button class="menu-action" id="export-button" type="button">ذخیرهٔ پشتیبان</button>
@@ -57,7 +71,7 @@
     <button class="menu-action page-link active" type="button" data-page="dashboard">برنامه</button>
     <button class="menu-action page-link" type="button" data-page="courses">مدیریت درس‌ها</button>
     <button class="menu-action page-link" type="button" data-page="settings">تنظیمات</button>
-    <footer class="app-footer">نسخهٔ <span>1.7.0</span></footer>
+    <footer class="app-footer">نسخهٔ <span>۱.۸.۰</span></footer>
   </dialog>
   <dialog id="course-dialog" class="course-dialog">
     <form id="course-form" novalidate>
@@ -73,10 +87,36 @@
         <label class="field-label">شروع<input name="start" id="course-start" type="time"></label>
         <label class="field-label">پایان<input name="end" id="course-end" type="time"></label>
       </div>
-      <label class="field-label">کلاس<input name="room" id="course-room" maxlength="50" placeholder="اختیاری"></label>
+      <div class="field-row">
+        <label class="field-label">شمارهٔ اتاق<input name="room" id="course-room" type="text" inputmode="numeric" maxlength="50" placeholder="اختیاری"></label>
+        <label class="field-label">نام استاد<input name="teacher" id="course-teacher" maxlength="80" placeholder="اختیاری"></label>
+      </div>
       <p id="form-error" class="form-error" role="alert" hidden></p>
       <div class="dialog-actions"><button type="button" class="secondary-button cancel-dialog">لغو</button><button type="submit" class="primary-button">ذخیره</button></div>
       <button type="button" class="delete-course-button" id="delete-course-button" hidden>حذف درس</button>
+    </form>
+  </dialog>
+  <dialog id="course-details-dialog" class="course-details-dialog">
+    <div class="dialog-heading"><h2 id="details-title">جزئیات درس</h2><button type="button" class="icon-button close-details" aria-label="بستن">×</button></div>
+    <dl class="details-list">
+      <div><dt>ساعت</dt><dd id="details-time"></dd></div>
+      <div><dt>روزهای برگزاری</dt><dd id="details-days"></dd></div>
+      <div><dt>شمارهٔ اتاق</dt><dd id="details-room"></dd></div>
+      <div><dt>استاد</dt><dd id="details-teacher"></dd></div>
+    </dl>
+    <div class="details-actions">
+      <button type="button" class="secondary-button" id="course-notes-button">یادداشت‌ها</button>
+      <button type="button" class="primary-button" id="edit-course-from-details">ویرایش درس</button>
+    </div>
+  </dialog>
+  <dialog id="note-dialog" class="course-dialog note-dialog">
+    <form id="note-form" novalidate>
+      <div class="dialog-heading"><h2 id="note-dialog-title">یادداشت</h2><button type="button" class="icon-button close-note" aria-label="بستن">×</button></div>
+      <input id="note-id" type="hidden">
+      <label class="field-label">عنوان<input id="note-title" maxlength="100" required></label>
+      <label class="field-label">متن<textarea id="note-text" rows="7" maxlength="5000"></textarea></label>
+      <p id="note-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" class="secondary-button cancel-note">لغو</button><button type="submit" class="primary-button">ذخیره</button></div>
     </form>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

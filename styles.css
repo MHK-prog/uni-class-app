@@ -110,3 +110,23 @@ body.dialog-open{position:fixed;inset-inline:0;width:100%;overflow:hidden;oversc
 .note-dialog textarea:focus{border-color:var(--purple)}
 .app-shell{touch-action:pan-y}
 @media(max-width:370px){.editable-card{grid-template-columns:minmax(0,1fr) auto;padding:9px}.editable-card .course-info h3{font-size:14px}.details-button{padding-inline:10px}}
+
+/* Softer transitions and icons scaled to a fixed box to preserve the layout. */
+.course-card,.menu-action,.primary-button,.secondary-button,.icon-button,.day-option{transition:background-color .18s ease,border-color .18s ease,color .18s ease,transform .18s ease}
+.course-card:active{transform:scale(.995)}
+.course-info .course-meta{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:3px;color:var(--muted);font-size:12px;line-height:1.4}
+.meta-chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.course-card:not(.editable-card){grid-template-columns:94px minmax(0,1fr)}
+.menu-action{display:flex;align-items:center;gap:12px}
+.menu-item-icon{display:block;width:24px;height:24px;flex:0 0 24px;object-fit:contain}
+.menu-drawer{transform:translateX(100%);transition:transform 260ms cubic-bezier(.22,1,.36,1);touch-action:pan-y}
+.menu-drawer[open]:not(.drawer-entering):not(.drawer-closing){transform:translateX(0)}
+.menu-drawer.drawer-entering,.menu-drawer.drawer-closing{transform:translateX(100%)}
+.menu-drawer.drawer-dragging{transition:none}
+.menu-drawer::backdrop{opacity:var(--drawer-backdrop-opacity,.62);transition:opacity 260ms cubic-bezier(.22,1,.36,1)}
+.menu-drawer.drawer-entering::backdrop,.menu-drawer.drawer-closing::backdrop{opacity:0}
+.menu-drawer.drawer-dragging::backdrop{transition:none}
+.page-enter{animation:page-enter 220ms cubic-bezier(.2,.75,.25,1) both}
+@keyframes page-enter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:370px){.course-card:not(.editable-card){grid-template-columns:90px minmax(0,1fr)}.course-card:not(.editable-card) .course-time{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.course-card,.menu-action,.primary-button,.secondary-button,.icon-button,.day-option,.menu-drawer,.menu-drawer::backdrop,.page-enter{transition:none!important;animation:none!important}}

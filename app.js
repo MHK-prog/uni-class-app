@@ -2,14 +2,13 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.9.0';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
 const WEEK_DAY_SHORT = { شنبه: 'ش', یکشنبه: 'ی', دوشنبه: 'د', 'سه‌شنبه': 'س', 'چهارشنبه': 'چ', پنجشنبه: 'پ', جمعه: 'ج' };
 const LEGACY_DEFAULT_ANCHOR = '2026-10-03';
-const DEFAULT_CYCLE = { anchorDate: currentSaturdayISO(), anchorParity: 'even' };
-const STATUS_LABELS = { upcoming: 'در پیش', live: 'در حال برگزاری', done: 'تمام‌شده' };
+const DEFAULT_CYCLE = { termStartDate: currentSaturdayISO(), termStartParity: 'even' };
 const numberFa = new Intl.NumberFormat('fa-IR');
 const $ = selector => document.querySelector(selector);
 let state = loadState();
@@ -20,13 +19,16 @@ let activeDetailsCourseId = '';
 let activeNotesCourseId = '';
 let activeModalCount = 0;
 let lockedScrollY = 0;
+let drawerCloseTimer;
 
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if (saved && Array.isArray(saved.courses)) {
       const oldSettings = normalizeLegacySettings(saved.settings);
-      return { cycle: normalizeCycle(saved.cycle, oldSettings), courses: normalizeCourses(saved.courses, oldSettings) };
+      const cycle = normalizeCycle(saved.cycle, oldSettings);
+      const courseSettings = { ...oldSettings, anchorDate: cycle.termStartDate, anchorParity: cycle.termStartParity, hasParity: true };
+      return { cycle, courses: normalizeCourses(saved.courses, courseSettings) };
     }
   } catch (error) { console.warn('Could not load saved schedule.', error); }
   return { cycle: { ...DEFAULT_CYCLE }, courses: [] };
@@ -34,20 +36,23 @@ function loadState() {
 
 function normalizeLegacySettings(input = {}) {
   if (!input || typeof input !== 'object') input = {};
-  const date = input.anchorDate || '';
+  const date = input.termStartDate || input.anchorDate || '';
   const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(`${date}T12:00:00Z`));
-  const hasParity = input.anchorParity === 'odd' || input.anchorParity === 'even';
-  return { anchorDate: validDate ? date : LEGACY_DEFAULT_ANCHOR, anchorParity: input.anchorParity === 'odd' ? 'odd' : 'even', hasParity };
+  const storedParity = input.termStartParity || input.anchorParity;
+  const hasParity = storedParity === 'odd' || storedParity === 'even';
+  return { anchorDate: validDate ? date : LEGACY_DEFAULT_ANCHOR, anchorParity: storedParity === 'odd' ? 'odd' : 'even', hasParity };
 }
 
 function normalizeCycle(input = {}, oldSettings = normalizeLegacySettings()) {
   if (!input || typeof input !== 'object') input = {};
-  const date = input.anchorDate || oldSettings.anchorDate || DEFAULT_CYCLE.anchorDate;
+  const date = input.termStartDate || input.anchorDate || oldSettings.anchorDate || DEFAULT_CYCLE.termStartDate;
   const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(`${date}T12:00:00Z`));
-  const anchorParity = input.anchorParity === 'odd' || input.anchorParity === 'even'
-    ? input.anchorParity
-    : oldSettings.hasParity ? oldSettings.anchorParity : weekIndexBetween(date, currentSaturdayISO()) === 0 ? 'even' : 'odd';
-  return { anchorDate: validDate ? date : DEFAULT_CYCLE.anchorDate, anchorParity };
+  const termStartDate = validDate ? date : DEFAULT_CYCLE.termStartDate;
+  const inputParity = input.termStartParity || input.anchorParity;
+  const termStartParity = inputParity === 'odd' || inputParity === 'even'
+    ? inputParity
+    : oldSettings.hasParity ? oldSettings.anchorParity : weekIndexBetween(termStartDate, currentSaturdayISO()) === 0 ? 'even' : 'odd';
+  return { termStartDate, termStartParity };
 }
 
 function validTime(value) { return typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value); }
@@ -140,7 +145,7 @@ function weekIndexBetween(anchorDate, dateString) {
   return ((weeks % 2) + 2) % 2;
 }
 
-function cycleWeekIndex(dateString) { return weekIndexBetween(state.cycle.anchorDate, dateString); }
+function cycleWeekIndex(dateString) { return weekIndexBetween(state.cycle.termStartDate, dateString); }
 
 function toFaDigits(value) {
   return String(value).replace(/[0-9٠-٩۰-۹]/g, digit => {
@@ -152,8 +157,8 @@ function toFaDigits(value) {
 function displayTime(value) { return value ? toFaDigits(value) : '—'; }
 
 function parityForCycleIndex(index) {
-  if (index === 0) return state.cycle.anchorParity;
-  return state.cycle.anchorParity === 'even' ? 'odd' : 'even';
+  if (index === 0) return state.cycle.termStartParity;
+  return state.cycle.termStartParity === 'even' ? 'odd' : 'even';
 }
 
 function parityLabel(index) { return `هفتهٔ ${parityForCycleIndex(index) === 'even' ? 'زوج' : 'فرد'}`; }
@@ -171,9 +176,10 @@ function currentSaturdayISO(now = new Date()) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 }
 
-function syncParitySetting(currentWeekIndex = cycleWeekIndex(targetDay(0).iso)) {
-  const parity = $('#current-week-parity');
-  if (parity) parity.value = parityForCycleIndex(currentWeekIndex);
+function syncTermSettings() {
+  const date = $('#term-start-date'), parity = $('#term-start-parity');
+  if (date) date.value = state.cycle.termStartDate;
+  if (parity) parity.value = state.cycle.termStartParity;
 }
 
 function syncWeekRowLabels() {
@@ -262,8 +268,11 @@ function createCourseCard(course, status, editable = false) {
     const details = document.createElement('button'); details.type = 'button'; details.className = 'details-button secondary-button'; details.textContent = 'جزئیات'; details.setAttribute('aria-label', `جزئیات ${course.title}`); details.addEventListener('click', () => openCourseDetails(course));
     actions.append(details); article.append(time, info, actions);
   } else {
-    const pill = document.createElement('span'); pill.className = 'status-pill'; pill.textContent = STATUS_LABELS[status];
-    article.append(time, info, pill);
+    const meta = document.createElement('div'); meta.className = 'course-meta';
+    if (course.room) { const room = document.createElement('span'); room.className = 'meta-chip'; room.textContent = `اتاق ${course.room}`; meta.append(room); }
+    if (course.teacher) { const teacher = document.createElement('span'); teacher.className = 'meta-chip'; teacher.textContent = `استاد ${course.teacher}`; meta.append(teacher); }
+    if (meta.childElementCount) info.append(meta);
+    article.append(time, info);
   }
   return article;
 }
@@ -288,6 +297,77 @@ function showAppModal(dialog) {
   }
   activeModalCount += 1;
   dialog.showModal();
+}
+
+function openMenuDrawer(dragOffset = null) {
+  const drawer = $('#menu-drawer');
+  clearTimeout(drawerCloseTimer);
+  drawer.classList.remove('drawer-closing');
+  if (dragOffset === null) {
+    drawer.classList.add('drawer-entering');
+    drawer.style.setProperty('--drawer-backdrop-opacity', '0');
+    showAppModal(drawer);
+    $('#menu-button').setAttribute('aria-expanded', 'true');
+    requestAnimationFrame(() => {
+      drawer.classList.remove('drawer-entering');
+      drawer.style.setProperty('--drawer-backdrop-opacity', '0.62');
+    });
+    return;
+  }
+  drawer.classList.add('drawer-entering', 'drawer-dragging');
+  showAppModal(drawer);
+  $('#menu-button').setAttribute('aria-expanded', 'true');
+  drawer.classList.remove('drawer-entering');
+  drawer.style.transform = `translateX(${Math.max(0, drawer.getBoundingClientRect().width + dragOffset)}px)`;
+  setDrawerBackdropOpacity(drawer);
+}
+
+function setDrawerBackdropOpacity(drawer, progress = null) {
+  if (progress === null) {
+    const width = drawer.getBoundingClientRect().width || 1;
+    const match = drawer.style.transform.match(/translateX\((-?[\d.]+)px\)/);
+    const offset = match ? Number(match[1]) : 0;
+    progress = 1 - Math.max(0, Math.min(width, offset)) / width;
+  }
+  drawer.style.setProperty('--drawer-backdrop-opacity', String(Math.max(0, Math.min(1, progress)) * 0.62));
+}
+
+function moveMenuDrawer(delta, opening) {
+  const drawer = $('#menu-drawer');
+  let width = drawer.getBoundingClientRect().width || 1;
+  if (!drawer.open && opening && delta < -6) openMenuDrawer(delta);
+  if (!drawer.open) return;
+  width = drawer.getBoundingClientRect().width || width;
+  drawer.classList.add('drawer-dragging');
+  const offset = opening ? width + delta : delta;
+  drawer.style.transform = `translateX(${Math.max(0, Math.min(width, offset))}px)`;
+  setDrawerBackdropOpacity(drawer, 1 - Math.max(0, Math.min(width, offset)) / width);
+}
+
+function settleMenuDrawer(open) {
+  const drawer = $('#menu-drawer');
+  if (!drawer.open) return;
+  drawer.classList.remove('drawer-dragging', 'drawer-entering', 'drawer-closing');
+  drawer.style.transform = open ? 'translateX(0)' : 'translateX(100%)';
+  setDrawerBackdropOpacity(drawer, open ? 1 : 0);
+  if (open) {
+    drawer.style.removeProperty('transform');
+    drawer.style.removeProperty('--drawer-backdrop-opacity');
+    return;
+  }
+  closeMenuDrawer();
+}
+
+function closeMenuDrawer(immediate = false) {
+  const drawer = $('#menu-drawer');
+  if (!drawer.open) return;
+  clearTimeout(drawerCloseTimer);
+  drawer.classList.remove('drawer-dragging', 'drawer-entering');
+  if (immediate) { drawer.close(); return; }
+  drawer.classList.add('drawer-closing');
+  drawer.style.transform = 'translateX(100%)';
+  setDrawerBackdropOpacity(drawer, 0);
+  drawerCloseTimer = setTimeout(() => { if (drawer.open) drawer.close(); }, 280);
 }
 
 function handleModalClosed() {
@@ -319,6 +399,13 @@ function refreshCourseDetails() {
 function switchPage(destination) {
   document.querySelectorAll('[data-page-panel]').forEach(panel => { panel.hidden = panel.dataset.pagePanel !== destination; });
   document.querySelectorAll('.page-link').forEach(link => link.classList.toggle('active', link.dataset.page === destination));
+  const activePage = document.querySelector(`[data-page-panel="${destination}"]`);
+  if (activePage) {
+    activePage.classList.remove('page-enter');
+    void activePage.offsetWidth;
+    activePage.classList.add('page-enter');
+    setTimeout(() => activePage.classList.remove('page-enter'), 260);
+  }
 }
 
 function openNotesPage(courseId) {
@@ -378,7 +465,7 @@ function showToast(message) {
 }
 
 function exportSchedule() {
-  const payload = JSON.stringify({ formatVersion: 3, cycle: state.cycle, courses: state.courses }, null, 2);
+  const payload = JSON.stringify({ formatVersion: 4, cycle: state.cycle, courses: state.courses }, null, 2);
   const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url; link.download = 'class-schedule.json'; link.click(); URL.revokeObjectURL(url);
   showToast('نسخهٔ پشتیبان برنامه دانلود شد.');
@@ -390,10 +477,11 @@ async function importSchedule(file) {
     if (!parsed || !Array.isArray(parsed.courses)) throw new Error('ساختار فایل درست نیست.');
     const oldSettings = normalizeLegacySettings(parsed.settings);
     const cycle = normalizeCycle(parsed.cycle, oldSettings);
-    const courses = normalizeCourses(parsed.courses, oldSettings);
+    const courseSettings = { ...oldSettings, anchorDate: cycle.termStartDate, anchorParity: cycle.termStartParity, hasParity: true };
+    const courses = normalizeCourses(parsed.courses, courseSettings);
     if (parsed.courses.length && !courses.length) throw new Error('هیچ درس معتبری در فایل پیدا نشد.');
     if (state.courses.length && !window.confirm('برنامهٔ فعلی با اطلاعات فایل جایگزین شود؟')) return;
-    state = { cycle, courses }; saveState(); render(); syncParitySetting();
+    state = { cycle, courses }; saveState(); render(); syncTermSettings();
     showToast(`${numberFa.format(courses.length)} درس وارد شد.`);
   } catch (error) { showToast(`وارد کردن فایل ناموفق بود: ${error.message || 'فایل JSON معتبر نیست.'}`); }
   finally { $('#import-file').value = ''; }
@@ -407,11 +495,23 @@ function init() {
     render();
   }));
   $('#add-course-button').addEventListener('click', () => openCourseDialog());
-  $('#menu-button').addEventListener('click', () => { if (!$('#menu-drawer').open) showAppModal($('#menu-drawer')); });
-  $('.close-menu').addEventListener('click', () => $('#menu-drawer').close());
+  $('#menu-button').addEventListener('click', () => { if (!$('#menu-drawer').open) openMenuDrawer(); });
+  $('.close-menu').addEventListener('click', () => closeMenuDrawer());
   document.querySelectorAll('dialog').forEach(dialog => {
-    dialog.addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
-    dialog.addEventListener('close', handleModalClosed);
+    dialog.addEventListener('click', event => {
+      if (event.target !== event.currentTarget) return;
+      if (dialog.id === 'menu-drawer') closeMenuDrawer(); else dialog.close();
+    });
+    dialog.addEventListener('close', () => {
+      if (dialog.id === 'menu-drawer') {
+        clearTimeout(drawerCloseTimer);
+        $('#menu-button').setAttribute('aria-expanded', 'false');
+        dialog.classList.remove('drawer-entering', 'drawer-dragging', 'drawer-closing');
+        dialog.style.removeProperty('transform');
+        dialog.style.removeProperty('--drawer-backdrop-opacity');
+      }
+      handleModalClosed();
+    });
   });
   let horizontalGesture = null;
   document.addEventListener('touchstart', event => {
@@ -419,17 +519,47 @@ function init() {
     const touch = event.touches[0], drawer = $('#menu-drawer');
     const fromRightEdge = touch.clientX >= window.innerWidth - 40;
     const onPageSwipeSurface = event.target.closest('.app-shell') && !event.target.closest('input,select,textarea');
-    horizontalGesture = drawer.open ? (drawer.contains(event.target) ? { x: touch.clientX, y: touch.clientY, open: true } : null)
-      : (fromRightEdge || onPageSwipeSurface) ? { x: touch.clientX, y: touch.clientY, open: false } : null;
+    const open = drawer.open;
+    horizontalGesture = open ? (drawer.contains(event.target) ? { x: touch.clientX, y: touch.clientY, open, started: performance.now() } : null)
+      : (fromRightEdge || onPageSwipeSurface) ? { x: touch.clientX, y: touch.clientY, open, started: performance.now() } : null;
+  }, { passive: true });
+  document.addEventListener('touchmove', event => {
+    if (!horizontalGesture || event.touches.length !== 1) return;
+    const touch = event.touches[0], dx = touch.clientX - horizontalGesture.x, dy = Math.abs(touch.clientY - horizontalGesture.y);
+    if (dy > 36 && dy > Math.abs(dx) * 1.15) {
+      if (horizontalGesture.open) settleMenuDrawer(true);
+      else if ($('#menu-drawer').open) closeMenuDrawer(true);
+      horizontalGesture = null;
+      return;
+    }
+    if (Math.abs(dx) < 5) return;
+    if (horizontalGesture.open) {
+      if (dx > 0) moveMenuDrawer(dx, false);
+    } else if (dx < 0) moveMenuDrawer(dx, true);
   }, { passive: true });
   document.addEventListener('touchend', event => {
     if (!horizontalGesture) return;
     const touch = event.changedTouches[0], dx = touch.clientX - horizontalGesture.x, dy = Math.abs(touch.clientY - horizontalGesture.y);
-    if (dy < 100 && Math.abs(dx) > dy * 1.15 && !horizontalGesture.open && dx < -45) showAppModal($('#menu-drawer'));
-    else if (dy < 90 && Math.abs(dx) > dy * 1.2 && horizontalGesture.open && dx > 55) $('#menu-drawer').close();
+    const width = Math.max(1, $('#menu-drawer').getBoundingClientRect().width || window.innerWidth * 0.75);
+    const elapsed = Math.max(1, performance.now() - horizontalGesture.started), velocity = dx / elapsed;
+    if (dy < 100 && !horizontalGesture.open) {
+      const shouldOpen = -dx / width > 0.28 || velocity < -0.45;
+      if ($('#menu-drawer').open) settleMenuDrawer(shouldOpen);
+      else if (shouldOpen) openMenuDrawer();
+    } else if (dy < 100 && horizontalGesture.open) {
+      const shouldClose = dx / width > 0.28 || velocity > 0.45;
+      if (horizontalGesture.x !== undefined && $('#menu-drawer').classList.contains('drawer-dragging')) settleMenuDrawer(!shouldClose);
+      else if (shouldClose) closeMenuDrawer();
+    }
     horizontalGesture = null;
   }, { passive: true });
-  document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => { switchPage(button.dataset.page); $('#menu-drawer').close(); }));
+  document.addEventListener('touchcancel', () => {
+    if (!horizontalGesture) return;
+    if (horizontalGesture.open) settleMenuDrawer(true);
+    else if ($('#menu-drawer').open) closeMenuDrawer(true);
+    horizontalGesture = null;
+  }, { passive: true });
+  document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => { switchPage(button.dataset.page); closeMenuDrawer(); }));
   $('#import-button').addEventListener('click', () => $('#import-file').click());
   $('#export-button').addEventListener('click', exportSchedule);
   $('#import-file').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) importSchedule(file); });
@@ -459,14 +589,19 @@ function init() {
     saveState(); $('#note-dialog').close(); renderNotesPage(); refreshCourseDetails();
     showToast(index >= 0 ? 'یادداشت ویرایش شد.' : 'یادداشت اضافه شد.');
   });
-  $('#week-parity-form').addEventListener('submit', event => {
+  $('#term-settings-form').addEventListener('submit', event => {
     event.preventDefault();
-    const parity = $('#current-week-parity').value;
-    if (parity !== state.cycle.anchorParity) {
+    const date = $('#term-start-date').value;
+    const parity = $('#term-start-parity').value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T12:00:00Z`))) {
+      showToast('تاریخ شروع ترم را انتخاب کنید.');
+      return;
+    }
+    if (parity !== state.cycle.termStartParity) {
       state.courses.forEach(course => { course.daysByWeek = [course.daysByWeek[1], course.daysByWeek[0]]; });
     }
-    state.cycle = { anchorDate: currentSaturdayISO(), anchorParity: parity };
-    saveState(); render(); syncParitySetting(); showToast(`این هفته ${parity === 'even' ? 'زوج' : 'فرد'} تنظیم شد.`);
+    state.cycle = { termStartDate: date, termStartParity: parity };
+    saveState(); render(); syncTermSettings(); showToast('تاریخ شروع ترم ذخیره شد.');
   });
   ['course-title', 'course-room', 'course-teacher', 'note-title', 'note-text'].forEach(id => {
     $(`#${id}`).addEventListener('input', event => {
@@ -493,7 +628,7 @@ function init() {
     if (index >= 0) state.courses[index] = course; else state.courses.push(course);
     saveState(); $('#course-dialog').close(); render(); refreshCourseDetails(); showToast(index >= 0 ? 'تغییرات درس ذخیره شد.' : 'درس اضافه شد.');
   });
-  render(); syncParitySetting(); setInterval(render, 15000);
+  render(); syncTermSettings(); setInterval(render, 15000);
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Offline support unavailable.', error)));
 }
 

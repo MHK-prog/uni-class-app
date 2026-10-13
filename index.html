@@ -16,7 +16,7 @@
     <header class="topbar">
       <a class="brand" href="./" aria-label="برنامهٔ کلاس‌ها"><strong>کلاس‌های من</strong></a>
       <div class="top-actions">
-        <button class="menu-button" id="menu-button" type="button" aria-label="باز کردن منو" aria-haspopup="dialog" aria-controls="menu-drawer"><span aria-hidden="true">☰</span><i class="incomplete-indicator" aria-hidden="true" hidden></i></button>
+        <button class="menu-button" id="menu-button" type="button" aria-label="باز کردن منو" aria-haspopup="dialog" aria-expanded="false" aria-controls="menu-drawer"><span aria-hidden="true">☰</span><i class="incomplete-indicator" aria-hidden="true" hidden></i></button>
       </div>
     </header>
 
@@ -33,7 +33,7 @@
         <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
         <div id="empty-state" class="empty-state" hidden><p id="empty-title">امروز کلاسی ندارید</p></div>
       </section>
-      <footer class="app-footer">نسخهٔ <span id="app-version">۱.۸.۰</span></footer>
+      <footer class="app-footer">نسخهٔ <span id="app-version">۱.۹.۰</span></footer>
     </section>
 
     <section class="app-page" id="page-courses" data-page-panel="courses" hidden>
@@ -54,9 +54,10 @@
 
     <section class="app-page settings-page" id="page-settings" data-page-panel="settings" hidden>
       <h1>تنظیمات</h1>
-      <form id="week-parity-form" class="settings-form parity-form">
-        <label>این هفته کدام است؟<select id="current-week-parity"><option value="even">زوج</option><option value="odd">فرد</option></select></label>
-        <button class="secondary-button" type="submit">ذخیرهٔ هفته</button>
+      <form id="term-settings-form" class="settings-form term-settings-form">
+        <label>تاریخ شروع ترم<input id="term-start-date" type="date" required></label>
+        <label>هفتهٔ آغاز ترم<select id="term-start-parity"><option value="odd">فرد</option><option value="even">زوج</option></select></label>
+        <button class="secondary-button" type="submit">ذخیره</button>
       </form>
       <div class="settings-actions">
         <button class="menu-action" id="import-button" type="button">ورود برنامه</button>
@@ -68,10 +69,10 @@
   <input id="import-file" type="file" accept="application/json,.json" hidden>
   <dialog id="menu-drawer" class="menu-drawer" aria-label="منو">
     <div class="dialog-heading"><h2>منو</h2><button type="button" class="icon-button close-menu" aria-label="بستن منو">×</button></div>
-    <button class="menu-action page-link active" type="button" data-page="dashboard">برنامه</button>
-    <button class="menu-action page-link" type="button" data-page="courses">مدیریت درس‌ها</button>
-    <button class="menu-action page-link" type="button" data-page="settings">تنظیمات</button>
-    <footer class="app-footer">نسخهٔ <span>۱.۸.۰</span></footer>
+    <button class="menu-action page-link active" type="button" data-page="dashboard"><img class="menu-item-icon" src="assets/icons/home.webp" width="24" height="24" alt="" aria-hidden="true">برنامه</button>
+    <button class="menu-action page-link" type="button" data-page="courses"><img class="menu-item-icon" src="assets/icons/edit.webp" width="24" height="24" alt="" aria-hidden="true">مدیریت درس‌ها</button>
+    <button class="menu-action page-link" type="button" data-page="settings"><img class="menu-item-icon" src="assets/icons/setting.webp" width="24" height="24" alt="" aria-hidden="true">تنظیمات</button>
+    <footer class="app-footer">نسخهٔ <span>۱.۹.۰</span></footer>
   </dialog>
   <dialog id="course-dialog" class="course-dialog">
     <form id="course-form" novalidate>

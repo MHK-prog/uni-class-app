@@ -268,6 +268,17 @@ function createCourseCard(course, status, editable = false) {
     const details = document.createElement('button'); details.type = 'button'; details.className = 'details-button secondary-button'; details.textContent = 'جزئیات'; details.setAttribute('aria-label', `جزئیات ${course.title}`); details.addEventListener('click', () => openCourseDetails(course));
     actions.append(details); article.append(time, info, actions);
   } else {
+    article.tabIndex = 0;
+    article.setAttribute('role', 'button');
+    article.setAttribute('aria-label', course.title);
+    article.setAttribute('aria-haspopup', 'dialog');
+    article.addEventListener('click', () => openCourseDetails(course));
+    article.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openCourseDetails(course);
+      }
+    });
     const meta = document.createElement('div'); meta.className = 'course-meta';
     if (course.room) { const room = document.createElement('span'); room.className = 'meta-chip'; room.textContent = `اتاق ${course.room}`; meta.append(room); }
     if (course.teacher) { const teacher = document.createElement('span'); teacher.className = 'meta-chip'; teacher.textContent = `استاد ${course.teacher}`; meta.append(teacher); }

@@ -117,6 +117,8 @@ body.dialog-open{position:fixed;inset-inline:0;width:100%;overflow:hidden;oversc
 .course-info .course-meta{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:3px;color:var(--muted);font-size:12px;line-height:1.4}
 .meta-chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .course-card:not(.editable-card){grid-template-columns:94px minmax(0,1fr)}
+.course-card:not(.editable-card){cursor:pointer}
+.course-card:not(.editable-card):focus-visible{outline:2px solid var(--purple-soft);outline-offset:2px}
 .menu-action{display:flex;align-items:center;gap:12px}
 .menu-item-icon{display:block;width:24px;height:24px;flex:0 0 24px;object-fit:contain}
 .menu-drawer{transform:translateX(100%);transition:transform 260ms cubic-bezier(.22,1,.36,1);touch-action:pan-y}

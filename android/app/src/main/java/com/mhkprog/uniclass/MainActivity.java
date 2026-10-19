@@ -116,8 +116,13 @@ public final class MainActivity extends Activity {
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
+        if (webView == null) {
+            finish();
+            return;
+        }
+        webView.evaluateJavascript("window.handleAppBack ? window.handleAppBack() : false", result -> {
+            if (!"true".equals(result) && !isFinishing()) finish();
+        });
     }
 
     private final class AppWebChromeClient extends WebChromeClient {
@@ -137,6 +142,11 @@ public final class MainActivity extends Activity {
     }
 
     private final class ScheduleBridge {
+        @JavascriptInterface
+        public void exitApp() {
+            runOnUiThread(MainActivity.this::finish);
+        }
+
         @JavascriptInterface
         public void saveBackup(String json) {
             if (json == null || json.isEmpty()) return;

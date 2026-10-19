@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.11.0';
+const APP_VERSION = '1.12.0';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -110,7 +110,7 @@ function normalizeCourses(items, oldSettings = normalizeLegacySettings(), flipWe
       daysByWeek: normalizeDaysByWeek(raw, oldSettings, flipWeeks),
       start: validTime(raw.start) ? raw.start : '',
       end: validTime(raw.end) ? raw.end : '',
-      room: toFaDigits(String(raw.room || '').trim()).slice(0, 50),
+      className: toFaDigits(String(raw.className ?? raw.classroom ?? raw.room ?? '').trim()).slice(0, 50),
       teacher: toFaDigits(String(raw.teacher || '').trim()).slice(0, 80),
       notes: normalizeNotes(raw.notes)
     };
@@ -364,7 +364,7 @@ function createCourseCard(course, status, editable = false) {
       }
     });
     const meta = document.createElement('div'); meta.className = 'course-meta';
-    if (course.room) { const room = document.createElement('span'); room.className = 'meta-chip'; room.textContent = `اتاق ${course.room}`; meta.append(room); }
+    if (course.className) { const className = document.createElement('span'); className.className = 'meta-chip'; className.textContent = `کلاس ${course.className}`; meta.append(className); }
     if (course.teacher) {
       const teacher = document.createElement('span'); teacher.className = 'meta-chip';
       const icon = document.createElement('img'); icon.className = 'meta-icon'; icon.src = 'assets/icons/profile.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true');
@@ -382,7 +382,7 @@ function openCourseDialog(course = null) {
   $('#course-id').value = course?.id || ''; $('#course-title').value = course?.title || '';
   selectedDaysByWeek = course ? course.daysByWeek.map(days => [...days]) : [[], []];
   syncDayPickers();
-  $('#course-start').value = course?.start || ''; $('#course-end').value = course?.end || ''; $('#course-room').value = course?.room || ''; $('#course-teacher').value = course?.teacher || '';
+  $('#course-start').value = course?.start || ''; $('#course-end').value = course?.end || ''; $('#course-class-name').value = course?.className || ''; $('#course-teacher').value = course?.teacher || '';
   $('#delete-course-button').hidden = !course;
   showAppModal($('#course-dialog')); $('#course-title').focus();
 }
@@ -486,7 +486,7 @@ function openCourseDetails(course) {
   $('#details-title').textContent = course.title;
   $('#details-time').textContent = course.start && course.end ? `${displayTime(course.start)} – ${displayTime(course.end)}` : 'زمان ثبت نشده';
   $('#details-days').textContent = formatDaysByWeek(course.daysByWeek);
-  $('#details-room').textContent = course.room || 'ثبت نشده';
+  $('#details-class-name').textContent = course.className || 'ثبت نشده';
   $('#details-teacher').textContent = course.teacher || 'ثبت نشده';
   showAppModal(details);
 }
@@ -507,6 +507,18 @@ function switchPage(destination) {
     setTimeout(() => activePage.classList.remove('page-enter'), 260);
   }
 }
+
+function handleAppBack() {
+  const drawer = $('#menu-drawer'), drawerWasOpen = drawer.open;
+  if (drawerWasOpen) closeMenuDrawer();
+  const activeDialog = [...document.querySelectorAll('dialog')].find(dialog => dialog.open && dialog.id !== 'menu-drawer');
+  if (activeDialog) { activeDialog.close(); return true; }
+  const activePage = document.querySelector('[data-page-panel]:not([hidden])')?.dataset.pagePanel || 'dashboard';
+  if (activePage !== 'dashboard') switchPage('dashboard');
+  return drawerWasOpen || activePage !== 'dashboard';
+}
+
+window.handleAppBack = handleAppBack;
 
 function openNotesPage(courseId) {
   activeNotesCourseId = courseId;
@@ -567,7 +579,7 @@ function showToast(message) {
 }
 
 function exportSchedule() {
-  const payload = JSON.stringify({ formatVersion: 5, cycle: state.cycle, courses: state.courses }, null, 2);
+  const payload = JSON.stringify({ formatVersion: 6, cycle: state.cycle, courses: state.courses }, null, 2);
   if (window.AndroidScheduleBridge?.saveBackup) {
     window.AndroidScheduleBridge.saveBackup(payload);
     showToast('برای ذخیره، محل فایل را انتخاب کنید.');
@@ -628,8 +640,20 @@ function init() {
   $('#add-course-button').addEventListener('click', () => openCourseDialog());
   $('#menu-button').addEventListener('click', () => { if (!$('#menu-drawer').open) openMenuDrawer(); });
   $('.close-menu').addEventListener('click', () => closeMenuDrawer());
+  let horizontalGesture = null, gestureFrame = 0, suppressedBackdropTap = null;
+  const suppressBackdropClickAt = touch => {
+    suppressedBackdropTap = { x: touch.clientX, y: touch.clientY, until: performance.now() + 650 };
+  };
   document.querySelectorAll('dialog').forEach(dialog => {
     dialog.addEventListener('click', event => {
+      if (dialog.id === 'menu-drawer' && suppressedBackdropTap) {
+        const isSwipeClick = event.target === event.currentTarget && performance.now() < suppressedBackdropTap.until && Math.abs(event.clientX - suppressedBackdropTap.x) < 32 && Math.abs(event.clientY - suppressedBackdropTap.y) < 32;
+        suppressedBackdropTap = null;
+        if (isSwipeClick) {
+          event.preventDefault(); event.stopImmediatePropagation();
+          return;
+        }
+      }
       if (event.target !== event.currentTarget) return;
       if (dialog.id === 'menu-drawer') closeMenuDrawer(); else dialog.close();
     });
@@ -644,7 +668,6 @@ function init() {
       handleModalClosed();
     });
   });
-  let horizontalGesture = null, gestureFrame = 0;
   const moveGesture = (gesture, delta) => {
     if (gesture.open) { if (delta > 0) moveMenuDrawer(delta, false, gesture.width); }
     else if (delta < 0) moveMenuDrawer(delta, true, gesture.width);
@@ -652,7 +675,7 @@ function init() {
   document.addEventListener('touchstart', event => {
     if (event.touches.length !== 1) {
       cancelAnimationFrame(gestureFrame); gestureFrame = 0;
-      if (horizontalGesture?.open) settleMenuDrawer(true);
+      if (horizontalGesture && $('#menu-drawer').open) settleMenuDrawer(true);
       else if ($('#menu-drawer').open) closeMenuDrawer(true);
       horizontalGesture = null;
       return;
@@ -671,7 +694,7 @@ function init() {
     if (dy > 36 && dy > Math.abs(dx) * 1.15) {
       cancelAnimationFrame(gestureFrame); gestureFrame = 0;
       if (horizontalGesture.open) settleMenuDrawer(true);
-      else if ($('#menu-drawer').open) closeMenuDrawer(true);
+      else if ($('#menu-drawer').open) { suppressBackdropClickAt(touch); settleMenuDrawer(true); }
       horizontalGesture = null;
       return;
     }
@@ -690,6 +713,7 @@ function init() {
     const elapsed = Math.max(1, performance.now() - gesture.started), velocity = dx / elapsed;
     if (dy < 100 && !gesture.open) {
       const shouldOpen = -dx / gesture.width > 0.28 || velocity < -0.45;
+      if (shouldOpen) suppressBackdropClickAt(touch);
       if ($('#menu-drawer').open && $('#menu-drawer').classList.contains('drawer-dragging')) settleMenuDrawer(shouldOpen);
       else if ($('#menu-drawer').open) settleMenuDrawer(true);
       else if (shouldOpen) openMenuDrawer();
@@ -698,13 +722,16 @@ function init() {
       if ($('#menu-drawer').classList.contains('drawer-dragging')) settleMenuDrawer(!shouldClose);
       else if (shouldClose) closeMenuDrawer();
     } else if (gesture.open) settleMenuDrawer(true);
-    else if ($('#menu-drawer').open) closeMenuDrawer(true);
+    else if ($('#menu-drawer').open) settleMenuDrawer(true);
   }, { passive: true });
-  document.addEventListener('touchcancel', () => {
+  document.addEventListener('touchcancel', event => {
     if (!horizontalGesture) return;
     cancelAnimationFrame(gestureFrame); gestureFrame = 0;
-    if (horizontalGesture.open) settleMenuDrawer(true);
-    else if ($('#menu-drawer').open) closeMenuDrawer(true);
+    const touch = event.changedTouches?.[0];
+    if ($('#menu-drawer').open) {
+      if (!horizontalGesture.open && touch) suppressBackdropClickAt(touch);
+      settleMenuDrawer(true);
+    }
     horizontalGesture = null;
   }, { passive: true });
   document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => { switchPage(button.dataset.page); closeMenuDrawer(); }));
@@ -747,7 +774,7 @@ function init() {
     state.cycle = { termStartDate: date };
     saveState(); render(); syncTermSettings(); showToast('تاریخ شروع ترم ذخیره شد.');
   });
-  ['course-title', 'course-room', 'course-teacher', 'note-title', 'note-text'].forEach(id => {
+  ['course-title', 'course-class-name', 'course-teacher', 'note-title', 'note-text'].forEach(id => {
     $(`#${id}`).addEventListener('input', event => {
       const start = event.target.selectionStart, end = event.target.selectionEnd;
       const converted = toFaDigits(event.target.value);
@@ -764,7 +791,7 @@ function init() {
     const id = String(values.get('id') || makeId()), previous = state.courses.find(item => item.id === id);
     const course = {
       id, title, daysByWeek: selectedDaysByWeek.map(days => [...days]), start, end,
-      room: toFaDigits(String(values.get('room') || '').trim()),
+      className: toFaDigits(String(values.get('className') || '').trim()),
       teacher: toFaDigits(String(values.get('teacher') || '').trim()),
       notes: previous?.notes || []
     };
@@ -772,6 +799,14 @@ function init() {
     if (index >= 0) state.courses[index] = course; else state.courses.push(course);
     saveState(); $('#course-dialog').close(); render(); refreshCourseDetails(); showToast(index >= 0 ? 'تغییرات درس ذخیره شد.' : 'درس اضافه شد.');
   });
+  if (window.history?.pushState) {
+    const appState = { classScheduleApp: true };
+    window.history.pushState(appState, '', window.location.href);
+    window.addEventListener('popstate', () => {
+      if (handleAppBack()) window.history.pushState(appState, '', window.location.href);
+      else window.AndroidScheduleBridge?.exitApp?.();
+    });
+  }
   render(); syncTermSettings(); setInterval(render, 15000);
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Offline support unavailable.', error)));
 }

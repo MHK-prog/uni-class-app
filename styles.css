@@ -174,3 +174,4 @@ html,body{overscroll-behavior-y:none}
 .date-picker-trigger{justify-content:flex-start}
 .calendar-navigation{grid-template-columns:minmax(68px,1fr) auto minmax(68px,1fr);gap:6px}
 .calendar-navigation button{min-height:44px;padding-inline:8px;font-size:12px;white-space:nowrap}
+*{-webkit-tap-highlight-color:transparent}

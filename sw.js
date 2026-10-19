@@ -1,5 +1,5 @@
 // Keep in sync with APP_VERSION in app.js.
-const APP_VERSION = '1.11.0';
+const APP_VERSION = '1.12.0';
 const CACHE_PREFIX = 'class-schedule-static-';
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}`;
 const ASSETS = ['./index.html', './styles.css', './app.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './fonts/Vazirmatn.woff2', './assets/icons/archive.webp', './assets/icons/close.webp', './assets/icons/download.webp', './assets/icons/edit.webp', './assets/icons/home.webp', './assets/icons/menu.webp', './assets/icons/profile.webp', './assets/icons/reload.webp', './assets/icons/setting.webp', './assets/icons/upload.webp'];

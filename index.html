@@ -34,7 +34,7 @@
         <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
         <div id="empty-state" class="empty-state" hidden><p id="empty-title">امروز کلاسی ندارید</p></div>
       </section>
-      <footer class="app-footer">نسخهٔ <span id="app-version">۱.۱۱.۰</span></footer>
+      <footer class="app-footer">نسخهٔ <span id="app-version">۱.۱۲.۰</span></footer>
     </section>
 
     <section class="app-page" id="page-courses" data-page-panel="courses" hidden>
@@ -74,7 +74,7 @@
     <button class="menu-action page-link active" type="button" data-page="dashboard"><img class="menu-item-icon" src="assets/icons/home.webp" width="24" height="24" alt="" aria-hidden="true">برنامه</button>
     <button class="menu-action page-link" type="button" data-page="courses"><img class="menu-item-icon" src="assets/icons/edit.webp" width="24" height="24" alt="" aria-hidden="true">مدیریت درس‌ها</button>
     <button class="menu-action page-link" type="button" data-page="settings"><img class="menu-item-icon" src="assets/icons/setting.webp" width="24" height="24" alt="" aria-hidden="true">تنظیمات</button>
-    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">۱.۱۱.۰</span></footer>
+    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">۱.۱۲.۰</span></footer>
   </dialog>
   <dialog id="date-picker-dialog" class="date-picker-dialog" aria-labelledby="calendar-title">
     <div class="dialog-heading"><h2 id="calendar-title">انتخاب تاریخ</h2><button type="button" class="icon-button close-calendar" aria-label="بستن"><img src="assets/icons/close.webp" width="24" height="24" alt="" aria-hidden="true"></button></div>
@@ -98,7 +98,7 @@
         <label class="field-label">پایان<input name="end" id="course-end" type="time"></label>
       </div>
       <div class="field-row">
-        <label class="field-label">شمارهٔ اتاق<input name="room" id="course-room" type="text" inputmode="numeric" maxlength="50" placeholder="اختیاری"></label>
+        <label class="field-label">نام کلاس<input name="className" id="course-class-name" type="text" maxlength="50" placeholder="اختیاری"></label>
         <label class="field-label">نام استاد<input name="teacher" id="course-teacher" maxlength="80" placeholder="اختیاری"></label>
       </div>
       <p id="form-error" class="form-error" role="alert" hidden></p>
@@ -111,7 +111,7 @@
     <dl class="details-list">
       <div><dt>ساعت</dt><dd id="details-time"></dd></div>
       <div><dt>روزهای برگزاری</dt><dd id="details-days"></dd></div>
-      <div><dt>شمارهٔ اتاق</dt><dd id="details-room"></dd></div>
+      <div><dt>نام کلاس</dt><dd id="details-class-name"></dd></div>
       <div><dt>استاد</dt><dd id="details-teacher"></dd></div>
     </dl>
     <div class="details-actions">

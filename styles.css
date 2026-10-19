@@ -38,7 +38,7 @@ body{font-size:16px}
 .primary-button,.secondary-button{min-height:48px;padding-inline:16px;font-size:15px}
 .icon-button{width:48px;height:48px;font-size:22px}
 .menu-drawer{position:fixed;inset-block:0;inset-inline-start:0;margin:0;width:min(75vw,420px);height:100dvh;max-height:100dvh;padding:22px 18px max(22px,env(safe-area-inset-bottom));border:1px solid var(--line);border-radius:18px 0 0 18px;background:var(--bg);color:var(--text);box-shadow:0 0 40px #0009;overscroll-behavior:contain}
-.menu-drawer::backdrop{background:#0009;backdrop-filter:blur(2px)}
+.menu-drawer::backdrop{background:#0009}
 .menu-drawer[open]{display:flex;flex-direction:column;gap:10px}
 .menu-drawer .dialog-heading{margin-bottom:8px}
 .menu-action{min-height:52px;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);text-align:right;font:inherit;font-size:16px;cursor:pointer;touch-action:manipulation}
@@ -132,3 +132,34 @@ body.dialog-open{position:fixed;inset-inline:0;width:100%;overflow:hidden;oversc
 @keyframes page-enter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:370px){.course-card:not(.editable-card){grid-template-columns:90px minmax(0,1fr)}.course-card:not(.editable-card) .course-time{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.course-card,.menu-action,.primary-button,.secondary-button,.icon-button,.day-option,.menu-drawer,.menu-drawer::backdrop,.page-enter{transition:none!important;animation:none!important}}
+
+/* Persian date selection, browser pull-to-refresh suppression, and APK link. */
+html,body{overscroll-behavior-y:none}
+.refresh-button{display:grid;place-items:center;flex:0 0 48px;padding:0}
+.refresh-button img{display:block;width:27px;height:27px;object-fit:contain;filter:hue-rotate(48deg) saturate(1.15)}
+.refresh-button.refreshing img{animation:refresh-spin .65s linear infinite}
+@keyframes refresh-spin{to{transform:rotate(360deg)}}
+.date-option{min-width:0}
+.date-option small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.date-picker-trigger{width:100%;min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:#100e16;color:var(--text);font:inherit;font-size:15px;text-align:right;cursor:pointer;touch-action:manipulation}
+.date-picker-trigger:focus-visible{outline:2px solid var(--purple-soft);outline-offset:2px}
+.date-picker-dialog{width:min(calc(100% - 24px),400px);max-height:calc(100dvh - 24px);overflow-y:auto;padding:16px;border:1px solid var(--line);border-radius:18px;background:var(--panel);color:var(--text);overscroll-behavior:contain}
+.date-picker-dialog::backdrop{background:rgba(0,0,0,.72);backdrop-filter:blur(2px)}
+.date-picker-dialog .dialog-heading{margin-bottom:12px}
+.calendar-navigation{display:grid;grid-template-columns:48px minmax(0,1fr) 48px;align-items:center;gap:10px;margin-bottom:12px;text-align:center}
+.calendar-navigation strong{font-size:16px}
+.calendar-navigation button{font-size:24px}
+.calendar-weekdays,.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.calendar-weekdays{margin-bottom:5px;color:var(--muted);text-align:center;font-size:13px;font-weight:700}
+.calendar-weekdays span{min-height:28px;display:grid;place-items:center}
+.calendar-day,.calendar-empty{width:100%;max-width:44px;aspect-ratio:1;justify-self:center}
+.calendar-day{padding:0;border:1px solid transparent;border-radius:50%;background:transparent;color:var(--text);font:inherit;font-size:14px;cursor:pointer;touch-action:manipulation}
+.calendar-day:active{background:var(--panel-2)}
+.calendar-day.today{border-color:var(--purple-soft)}
+.calendar-day.selected{border-color:var(--purple);background:var(--purple);color:#fff}
+.calendar-day:focus-visible{outline:2px solid var(--purple-soft);outline-offset:2px}
+.calendar-actions{display:flex;justify-content:space-between;gap:8px;margin-top:14px}
+.calendar-actions button{min-width:72px}
+.android-download{min-height:52px;text-decoration:none}
+.android-download-icon{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;background:#251b34;color:var(--purple-soft);font-size:22px}
+@media(prefers-reduced-motion:reduce){.refresh-button.refreshing img{animation:none}}

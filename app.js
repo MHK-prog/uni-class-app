@@ -2,17 +2,22 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
 const WEEK_DAY_SHORT = { شنبه: 'ش', یکشنبه: 'ی', دوشنبه: 'د', 'سه‌شنبه': 'س', 'چهارشنبه': 'چ', پنجشنبه: 'پ', جمعه: 'ج' };
 const LEGACY_DEFAULT_ANCHOR = '2026-10-03';
-const DEFAULT_CYCLE = { termStartDate: currentSaturdayISO(), termStartParity: 'even' };
+const DEFAULT_CYCLE = { termStartDate: currentSaturdayISO() };
 const numberFa = new Intl.NumberFormat('fa-IR');
+const jalaliDateFormatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+const jalaliShortDateFormatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' });
+const jalaliPartsFormatter = new Intl.DateTimeFormat('en-US-u-ca-persian-nu-latn', { timeZone: 'UTC', year: 'numeric', month: 'numeric', day: 'numeric' });
+const JALALI_MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
 const $ = selector => document.querySelector(selector);
 let state = loadState();
-let selectedDay = 'today';
+let selectedDateISO = targetDay(0).iso;
+let selectedDateMode = 'today';
 let selectedDaysByWeek = [[], []];
 let toastTimer;
 let activeDetailsCourseId = '';
@@ -20,15 +25,23 @@ let activeNotesCourseId = '';
 let activeModalCount = 0;
 let lockedScrollY = 0;
 let drawerCloseTimer;
+let calendarTarget = 'dashboard';
+let calendarDraftISO = '';
+let calendarCursorISO = '';
 
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if (saved && Array.isArray(saved.courses)) {
       const oldSettings = normalizeLegacySettings(saved.settings);
+      const oldParity = previousStartParity(saved.cycle, oldSettings);
       const cycle = normalizeCycle(saved.cycle, oldSettings);
-      const courseSettings = { ...oldSettings, anchorDate: cycle.termStartDate, anchorParity: cycle.termStartParity, hasParity: true };
-      return { cycle, courses: normalizeCourses(saved.courses, courseSettings) };
+      const courseSettings = { ...oldSettings, anchorDate: cycle.termStartDate, anchorParity: oldParity, hasParity: true };
+      const normalized = { cycle, courses: normalizeCourses(saved.courses, courseSettings, oldParity === 'even') };
+      if (saved.cycle?.termStartParity || saved.cycle?.anchorParity || oldSettings.hasParity) {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized)); } catch (error) { console.warn('Could not migrate saved schedule.', error); }
+      }
+      return normalized;
     }
   } catch (error) { console.warn('Could not load saved schedule.', error); }
   return { cycle: { ...DEFAULT_CYCLE }, courses: [] };
@@ -37,36 +50,43 @@ function loadState() {
 function normalizeLegacySettings(input = {}) {
   if (!input || typeof input !== 'object') input = {};
   const date = input.termStartDate || input.anchorDate || '';
-  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(`${date}T12:00:00Z`));
+  const validDate = isValidISODate(date);
   const storedParity = input.termStartParity || input.anchorParity;
   const hasParity = storedParity === 'odd' || storedParity === 'even';
-  return { anchorDate: validDate ? date : LEGACY_DEFAULT_ANCHOR, anchorParity: storedParity === 'odd' ? 'odd' : 'even', hasParity };
+  return { anchorDate: validDate ? date : LEGACY_DEFAULT_ANCHOR, anchorParity: storedParity === 'even' ? 'even' : 'odd', hasParity };
 }
 
 function normalizeCycle(input = {}, oldSettings = normalizeLegacySettings()) {
   if (!input || typeof input !== 'object') input = {};
   const date = input.termStartDate || input.anchorDate || oldSettings.anchorDate || DEFAULT_CYCLE.termStartDate;
-  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(`${date}T12:00:00Z`));
-  const termStartDate = validDate ? date : DEFAULT_CYCLE.termStartDate;
-  const inputParity = input.termStartParity || input.anchorParity;
-  const termStartParity = inputParity === 'odd' || inputParity === 'even'
-    ? inputParity
-    : oldSettings.hasParity ? oldSettings.anchorParity : weekIndexBetween(termStartDate, currentSaturdayISO()) === 0 ? 'even' : 'odd';
-  return { termStartDate, termStartParity };
+  return { termStartDate: isValidISODate(date) ? date : DEFAULT_CYCLE.termStartDate };
+}
+
+function previousStartParity(cycle = {}, oldSettings = normalizeLegacySettings()) {
+  const parity = cycle?.termStartParity || cycle?.anchorParity || (oldSettings.hasParity ? oldSettings.anchorParity : 'odd');
+  return parity === 'even' ? 'even' : 'odd';
+}
+
+function isValidISODate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T12:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 function validTime(value) { return typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value); }
 function makeId(seed = '') { return globalThis.crypto?.randomUUID?.() || `course-${Date.now()}-${seed}-${Math.random().toString(36).slice(2, 8)}`; }
 
-function normalizeDaysByWeek(raw, oldSettings) {
+function normalizeDaysByWeek(raw, oldSettings, flipWeeks = false) {
+  const normalizeRow = row => [...new Set((Array.isArray(row) ? row : []).filter(day => WEEK_DAY_ORDER.includes(day)))].sort((a, b) => WEEK_DAY_ORDER.indexOf(a) - WEEK_DAY_ORDER.indexOf(b));
+  const finish = rows => flipWeeks ? [rows[1], rows[0]] : rows;
   const rawRows = raw.daysByWeek;
   if (Array.isArray(rawRows)) {
-    return [0, 1].map(index => [...new Set((Array.isArray(rawRows[index]) ? rawRows[index] : []).filter(day => WEEK_DAY_ORDER.includes(day)))].sort((a, b) => WEEK_DAY_ORDER.indexOf(a) - WEEK_DAY_ORDER.indexOf(b)));
+    return finish([normalizeRow(rawRows[0]), normalizeRow(rawRows[1])]);
   }
   if (rawRows && typeof rawRows === 'object') {
     const first = rawRows.first || rawRows.week1 || [];
     const second = rawRows.second || rawRows.week2 || [];
-    return [first, second].map(row => [...new Set((Array.isArray(row) ? row : []).filter(day => WEEK_DAY_ORDER.includes(day)))].sort((a, b) => WEEK_DAY_ORDER.indexOf(a) - WEEK_DAY_ORDER.indexOf(b)));
+    return finish([normalizeRow(first), normalizeRow(second)]);
   }
 
   // Migrate the previous one-day/weekly-or-parity format into the two-week cycle.
@@ -78,16 +98,16 @@ function normalizeDaysByWeek(raw, oldSettings) {
   if (!['weekly', 'even', 'odd'].includes(week)) week = 'weekly';
   if (week === 'weekly' || !week) return [[day], [day]];
   const firstParity = oldSettings.anchorParity;
-  return week === firstParity ? [[day], []] : [[], [day]];
+  return finish(week === firstParity ? [[day], []] : [[], [day]]);
 }
 
-function normalizeCourses(items, oldSettings = normalizeLegacySettings()) {
+function normalizeCourses(items, oldSettings = normalizeLegacySettings(), flipWeeks = false) {
   return items.map((raw, index) => {
     const title = toFaDigits(String(raw.title || raw.name || '').trim()).slice(0, 80);
     if (!title) return null;
     return {
       id: String(raw.id || makeId(index)), title,
-      daysByWeek: normalizeDaysByWeek(raw, oldSettings),
+      daysByWeek: normalizeDaysByWeek(raw, oldSettings, flipWeeks),
       start: validTime(raw.start) ? raw.start : '',
       end: validTime(raw.end) ? raw.end : '',
       room: toFaDigits(String(raw.room || '').trim()).slice(0, 50),
@@ -123,12 +143,70 @@ function iranParts(date = new Date()) {
 function targetDay(offset = 0, now = new Date()) {
   const p = iranParts(now);
   const date = new Date(Date.UTC(p.year, p.month - 1, p.day + offset, 12));
-  const result = { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
-  const iso = `${result.year}-${String(result.month).padStart(2, '0')}-${String(result.day).padStart(2, '0')}`;
+  return dateFromISO(`${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`);
+}
+
+function dateFromISO(iso) {
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
   return {
-    ...result, iso, weekday: DAYS[date.getUTCDay()],
-    formatted: new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(date)
+    year, month, day, iso, weekday: DAYS[date.getUTCDay()],
+    formatted: jalaliDateFormatter.format(date), shortFormatted: jalaliShortDateFormatter.format(date)
   };
+}
+
+function jalaliPartsForISO(iso) {
+  const date = dateFromISO(iso);
+  const parts = Object.fromEntries(jalaliPartsFormatter.formatToParts(new Date(Date.UTC(date.year, date.month - 1, date.day, 12))).map(part => [part.type, part.value]));
+  return { year: Number(parts.year), month: Number(parts.month), day: Number(parts.day) };
+}
+
+function shiftISODate(iso, dayOffset) {
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + dayOffset, 12));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function jalaliMonthStart(iso) {
+  let first = iso, current = jalaliPartsForISO(iso);
+  while (true) {
+    const previous = shiftISODate(first, -1), parts = jalaliPartsForISO(previous);
+    if (parts.year !== current.year || parts.month !== current.month) return first;
+    first = previous;
+  }
+}
+
+function renderCalendar() {
+  const monthStart = jalaliMonthStart(calendarCursorISO), monthParts = jalaliPartsForISO(monthStart);
+  $('#calendar-month').textContent = `${JALALI_MONTHS[monthParts.month - 1]} ${numberFa.format(monthParts.year)}`;
+  const firstGregorianWeekday = new Date(`${monthStart}T12:00:00Z`).getUTCDay();
+  const cells = Array.from({ length: (firstGregorianWeekday + 1) % 7 }, () => {
+    const blank = document.createElement('span'); blank.className = 'calendar-empty'; blank.setAttribute('aria-hidden', 'true'); return blank;
+  });
+  const todayISO = targetDay(0).iso;
+  for (let offset = 0; offset < 32; offset += 1) {
+    const iso = shiftISODate(monthStart, offset), parts = jalaliPartsForISO(iso);
+    if (parts.year !== monthParts.year || parts.month !== monthParts.month) break;
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'calendar-day'; button.textContent = numberFa.format(parts.day);
+    button.setAttribute('aria-label', jalaliDateFormatter.format(new Date(`${iso}T12:00:00Z`)));
+    if (iso === calendarDraftISO) { button.classList.add('selected'); button.setAttribute('aria-pressed', 'true'); }
+    else button.setAttribute('aria-pressed', 'false');
+    if (iso === todayISO) button.classList.add('today');
+    button.addEventListener('click', () => { calendarDraftISO = iso; renderCalendar(); });
+    cells.push(button);
+  }
+  $('#calendar-grid').replaceChildren(...cells);
+}
+
+function openDatePicker(target) {
+  calendarTarget = target;
+  calendarDraftISO = target === 'term' ? $('#term-start-date').value : selectedDateISO;
+  if (!isValidISODate(calendarDraftISO)) calendarDraftISO = targetDay(0).iso;
+  calendarCursorISO = calendarDraftISO;
+  $('#calendar-title').textContent = target === 'term' ? 'تاریخ شروع ترم' : 'انتخاب تاریخ برنامه';
+  renderCalendar();
+  showAppModal($('#date-picker-dialog'));
 }
 
 function saturdayOnOrBefore(dateString) {
@@ -156,10 +234,7 @@ function toFaDigits(value) {
 }
 function displayTime(value) { return value ? toFaDigits(value) : '—'; }
 
-function parityForCycleIndex(index) {
-  if (index === 0) return state.cycle.termStartParity;
-  return state.cycle.termStartParity === 'even' ? 'odd' : 'even';
-}
+function parityForCycleIndex(index) { return index === 0 ? 'odd' : 'even'; }
 
 function parityLabel(index) { return `هفتهٔ ${parityForCycleIndex(index) === 'even' ? 'زوج' : 'فرد'}`; }
 
@@ -177,9 +252,9 @@ function currentSaturdayISO(now = new Date()) {
 }
 
 function syncTermSettings() {
-  const date = $('#term-start-date'), parity = $('#term-start-parity');
+  const date = $('#term-start-date'), label = $('#term-start-date-label');
   if (date) date.value = state.cycle.termStartDate;
-  if (parity) parity.value = state.cycle.termStartParity;
+  if (label) label.textContent = jalaliDateFormatter.format(new Date(`${state.cycle.termStartDate}T12:00:00Z`));
 }
 
 function syncWeekRowLabels() {
@@ -228,21 +303,33 @@ function statusFor(course, currentMinutes, isToday) {
 }
 
 function selectedInfo(now = new Date()) {
-  const offset = selectedDay === 'tomorrow' ? 1 : 0;
-  const date = targetDay(offset, now), current = iranParts(now);
-  return { ...date, isToday: offset === 0, currentMinutes: current.hour * 60 + current.minute, weekIndex: cycleWeekIndex(date.iso) };
+  const date = dateFromISO(selectedDateISO || targetDay(0, now).iso), current = iranParts(now), today = targetDay(0, now);
+  return { ...date, isToday: date.iso === today.iso, currentMinutes: current.hour * 60 + current.minute, weekIndex: cycleWeekIndex(date.iso) };
 }
 
 function render(now = new Date()) {
-  const today = targetDay(0, now), tomorrow = targetDay(1, now), info = selectedInfo(now), current = iranParts(now);
+  const today = targetDay(0, now), tomorrow = targetDay(1, now);
+  if (selectedDateMode === 'today') selectedDateISO = today.iso;
+  else if (selectedDateMode === 'tomorrow') selectedDateISO = tomorrow.iso;
+  const info = selectedInfo(now), current = iranParts(now);
   $('#iran-clock').textContent = toFaDigits(`${String(current.hour).padStart(2, '0')}:${String(current.minute).padStart(2, '0')}`);
   $('#selected-date').textContent = info.formatted;
   $('#today-name').textContent = today.weekday; $('#tomorrow-name').textContent = tomorrow.weekday;
   $('#cycle-week-label').textContent = parityLabel(info.weekIndex);
+  const todayButton = $('.day-option[data-day="today"]'), tomorrowButton = $('.day-option[data-day="tomorrow"]');
+  [[todayButton, today.iso], [tomorrowButton, tomorrow.iso]].forEach(([button, iso]) => {
+    const active = info.iso === iso;
+    button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active));
+  });
+  const dateButton = $('#pick-date-button'), customDate = info.iso !== today.iso && info.iso !== tomorrow.iso;
+  dateButton.classList.toggle('active', customDate); dateButton.setAttribute('aria-pressed', String(customDate));
+  $('#picked-date-short').textContent = info.shortFormatted;
   $('#app-version').textContent = toFaDigits(APP_VERSION);
   const matching = state.courses.filter(course => course.daysByWeek?.[info.weekIndex]?.includes(info.weekday) && course.start && course.end).sort((a, b) => a.start.localeCompare(b.start));
   const rendered = matching.map(course => ({ course, status: statusFor(course, info.currentMinutes, info.isToday) })).filter(item => !(info.isToday && item.status === 'done'));
-  $('#empty-title').textContent = selectedDay === 'tomorrow' ? 'فردا کلاسی ندارید' : matching.length ? 'کلاس‌های امروز تمام شده‌اند' : 'امروز کلاسی ندارید';
+  $('#empty-title').textContent = info.isToday
+    ? matching.length ? 'کلاس‌های امروز تمام شده‌اند' : 'امروز کلاسی ندارید'
+    : info.iso === tomorrow.iso ? 'فردا کلاسی ندارید' : `${info.weekday} ${info.shortFormatted} کلاسی ندارید`;
   const list = $('#schedule-list');
   list.replaceChildren(...rendered.map(item => createCourseCard(item.course, item.status)));
   $('#empty-state').hidden = rendered.length !== 0; list.hidden = rendered.length === 0;
@@ -310,7 +397,7 @@ function showAppModal(dialog) {
   dialog.showModal();
 }
 
-function openMenuDrawer(dragOffset = null) {
+function openMenuDrawer(dragOffset = null, dragWidth = null) {
   const drawer = $('#menu-drawer');
   clearTimeout(drawerCloseTimer);
   drawer.classList.remove('drawer-closing');
@@ -329,30 +416,31 @@ function openMenuDrawer(dragOffset = null) {
   showAppModal(drawer);
   $('#menu-button').setAttribute('aria-expanded', 'true');
   drawer.classList.remove('drawer-entering');
-  drawer.style.transform = `translateX(${Math.max(0, drawer.getBoundingClientRect().width + dragOffset)}px)`;
-  setDrawerBackdropOpacity(drawer);
+  const width = dragWidth || Math.min(window.innerWidth * 0.75, 420);
+  const offset = Math.max(0, width + dragOffset);
+  drawer.style.transform = `translate3d(${offset}px, 0, 0)`;
+  setDrawerBackdropOpacity(drawer, 1 - Math.min(width, offset) / width, width);
 }
 
-function setDrawerBackdropOpacity(drawer, progress = null) {
+function setDrawerBackdropOpacity(drawer, progress = null, width = Math.min(window.innerWidth * 0.75, 420)) {
   if (progress === null) {
-    const width = drawer.getBoundingClientRect().width || 1;
-    const match = drawer.style.transform.match(/translateX\((-?[\d.]+)px\)/);
+    width = width || 1;
+    const match = drawer.style.transform.match(/translate(?:3d|X)\((-?[\d.]+)px/);
     const offset = match ? Number(match[1]) : 0;
     progress = 1 - Math.max(0, Math.min(width, offset)) / width;
   }
   drawer.style.setProperty('--drawer-backdrop-opacity', String(Math.max(0, Math.min(1, progress)) * 0.62));
 }
 
-function moveMenuDrawer(delta, opening) {
+function moveMenuDrawer(delta, opening, width) {
   const drawer = $('#menu-drawer');
-  let width = drawer.getBoundingClientRect().width || 1;
-  if (!drawer.open && opening && delta < -6) openMenuDrawer(delta);
+  if (!drawer.open && opening && delta < -6) openMenuDrawer(delta, width);
   if (!drawer.open) return;
-  width = drawer.getBoundingClientRect().width || width;
   drawer.classList.add('drawer-dragging');
   const offset = opening ? width + delta : delta;
-  drawer.style.transform = `translateX(${Math.max(0, Math.min(width, offset))}px)`;
-  setDrawerBackdropOpacity(drawer, 1 - Math.max(0, Math.min(width, offset)) / width);
+  const clampedOffset = Math.max(0, Math.min(width, offset));
+  drawer.style.transform = `translate3d(${clampedOffset}px, 0, 0)`;
+  setDrawerBackdropOpacity(drawer, 1 - clampedOffset / width, width);
 }
 
 function settleMenuDrawer(open) {
@@ -476,7 +564,12 @@ function showToast(message) {
 }
 
 function exportSchedule() {
-  const payload = JSON.stringify({ formatVersion: 4, cycle: state.cycle, courses: state.courses }, null, 2);
+  const payload = JSON.stringify({ formatVersion: 5, cycle: state.cycle, courses: state.courses }, null, 2);
+  if (window.AndroidScheduleBridge?.saveBackup) {
+    window.AndroidScheduleBridge.saveBackup(payload);
+    showToast('برای ذخیره، محل فایل را انتخاب کنید.');
+    return;
+  }
   const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url; link.download = 'class-schedule.json'; link.click(); URL.revokeObjectURL(url);
   showToast('نسخهٔ پشتیبان برنامه دانلود شد.');
@@ -487,9 +580,10 @@ async function importSchedule(file) {
     const parsed = JSON.parse((await file.text()).replace(/^\uFEFF/, ''));
     if (!parsed || !Array.isArray(parsed.courses)) throw new Error('ساختار فایل درست نیست.');
     const oldSettings = normalizeLegacySettings(parsed.settings);
+    const oldParity = previousStartParity(parsed.cycle, oldSettings);
     const cycle = normalizeCycle(parsed.cycle, oldSettings);
-    const courseSettings = { ...oldSettings, anchorDate: cycle.termStartDate, anchorParity: cycle.termStartParity, hasParity: true };
-    const courses = normalizeCourses(parsed.courses, courseSettings);
+    const courseSettings = { ...oldSettings, anchorDate: cycle.termStartDate, anchorParity: oldParity, hasParity: true };
+    const courses = normalizeCourses(parsed.courses, courseSettings, oldParity === 'even');
     if (parsed.courses.length && !courses.length) throw new Error('هیچ درس معتبری در فایل پیدا نشد.');
     if (state.courses.length && !window.confirm('برنامهٔ فعلی با اطلاعات فایل جایگزین شود؟')) return;
     state = { cycle, courses }; saveState(); render(); syncTermSettings();
@@ -500,11 +594,31 @@ async function importSchedule(file) {
 
 function init() {
   initDayPickers();
-  document.querySelectorAll('[data-day]').forEach(button => button.addEventListener('click', () => {
-    selectedDay = button.dataset.day;
-    document.querySelectorAll('[data-day]').forEach(option => { const active = option === button; option.classList.toggle('active', active); option.setAttribute('aria-pressed', String(active)); });
+  document.querySelectorAll('.day-option[data-day]').forEach(button => button.addEventListener('click', () => {
+    selectedDateMode = button.dataset.day;
+    selectedDateISO = targetDay(selectedDateMode === 'tomorrow' ? 1 : 0).iso;
     render();
   }));
+  $('#pick-date-button').addEventListener('click', () => openDatePicker('dashboard'));
+  $('#term-start-date-picker').addEventListener('click', () => openDatePicker('term'));
+  $('#calendar-previous').addEventListener('click', () => { calendarCursorISO = shiftISODate(jalaliMonthStart(calendarCursorISO), -1); renderCalendar(); });
+  $('#calendar-next').addEventListener('click', () => { calendarCursorISO = shiftISODate(jalaliMonthStart(calendarCursorISO), 40); renderCalendar(); });
+  $('#calendar-today').addEventListener('click', () => { calendarDraftISO = targetDay(0).iso; calendarCursorISO = calendarDraftISO; renderCalendar(); });
+  $('#calendar-cancel').addEventListener('click', () => $('#date-picker-dialog').close());
+  $('.close-calendar').addEventListener('click', () => $('#date-picker-dialog').close());
+  $('#calendar-apply').addEventListener('click', () => {
+    if (calendarTarget === 'term') {
+      $('#term-start-date').value = calendarDraftISO;
+      syncTermSettings();
+    } else { selectedDateISO = calendarDraftISO; selectedDateMode = 'custom'; }
+    $('#date-picker-dialog').close();
+    render();
+  });
+  $('#refresh-button').addEventListener('click', async () => {
+    const button = $('#refresh-button'); button.classList.add('refreshing');
+    try { const registration = await navigator.serviceWorker?.getRegistration(); await registration?.update(); } catch (error) { console.warn('Could not check for app updates.', error); }
+    window.location.reload();
+  });
   $('#add-course-button').addEventListener('click', () => openCourseDialog());
   $('#menu-button').addEventListener('click', () => { if (!$('#menu-drawer').open) openMenuDrawer(); });
   $('.close-menu').addEventListener('click', () => closeMenuDrawer());
@@ -524,48 +638,65 @@ function init() {
       handleModalClosed();
     });
   });
-  let horizontalGesture = null;
+  let horizontalGesture = null, gestureFrame = 0;
+  const moveGesture = (gesture, delta) => {
+    if (gesture.open) { if (delta > 0) moveMenuDrawer(delta, false, gesture.width); }
+    else if (delta < 0) moveMenuDrawer(delta, true, gesture.width);
+  };
   document.addEventListener('touchstart', event => {
-    if (event.touches.length !== 1) { horizontalGesture = null; return; }
+    if (event.touches.length !== 1) {
+      cancelAnimationFrame(gestureFrame); gestureFrame = 0;
+      if (horizontalGesture?.open) settleMenuDrawer(true);
+      else if ($('#menu-drawer').open) closeMenuDrawer(true);
+      horizontalGesture = null;
+      return;
+    }
     const touch = event.touches[0], drawer = $('#menu-drawer');
     const fromRightEdge = touch.clientX >= window.innerWidth - 40;
     const onPageSwipeSurface = event.target.closest('.app-shell') && !event.target.closest('input,select,textarea');
     const open = drawer.open;
-    horizontalGesture = open ? (drawer.contains(event.target) ? { x: touch.clientX, y: touch.clientY, open, started: performance.now() } : null)
-      : (fromRightEdge || onPageSwipeSurface) ? { x: touch.clientX, y: touch.clientY, open, started: performance.now() } : null;
+    const width = open ? Math.max(1, drawer.offsetWidth) : Math.max(1, Math.min(window.innerWidth * 0.75, 420));
+    horizontalGesture = open ? (drawer.contains(event.target) ? { x: touch.clientX, y: touch.clientY, open, width, started: performance.now() } : null)
+      : (fromRightEdge || onPageSwipeSurface) ? { x: touch.clientX, y: touch.clientY, open, width, started: performance.now() } : null;
   }, { passive: true });
   document.addEventListener('touchmove', event => {
     if (!horizontalGesture || event.touches.length !== 1) return;
     const touch = event.touches[0], dx = touch.clientX - horizontalGesture.x, dy = Math.abs(touch.clientY - horizontalGesture.y);
     if (dy > 36 && dy > Math.abs(dx) * 1.15) {
+      cancelAnimationFrame(gestureFrame); gestureFrame = 0;
       if (horizontalGesture.open) settleMenuDrawer(true);
       else if ($('#menu-drawer').open) closeMenuDrawer(true);
       horizontalGesture = null;
       return;
     }
     if (Math.abs(dx) < 5) return;
-    if (horizontalGesture.open) {
-      if (dx > 0) moveMenuDrawer(dx, false);
-    } else if (dx < 0) moveMenuDrawer(dx, true);
+    horizontalGesture.lastDelta = dx;
+    if (!gestureFrame) gestureFrame = requestAnimationFrame(() => {
+      gestureFrame = 0;
+      if (horizontalGesture) moveGesture(horizontalGesture, horizontalGesture.lastDelta);
+    });
   }, { passive: true });
   document.addEventListener('touchend', event => {
     if (!horizontalGesture) return;
-    const touch = event.changedTouches[0], dx = touch.clientX - horizontalGesture.x, dy = Math.abs(touch.clientY - horizontalGesture.y);
-    const width = Math.max(1, $('#menu-drawer').getBoundingClientRect().width || window.innerWidth * 0.75);
-    const elapsed = Math.max(1, performance.now() - horizontalGesture.started), velocity = dx / elapsed;
-    if (dy < 100 && !horizontalGesture.open) {
-      const shouldOpen = -dx / width > 0.28 || velocity < -0.45;
-      if ($('#menu-drawer').open) settleMenuDrawer(shouldOpen);
+    const gesture = horizontalGesture, touch = event.changedTouches[0], dx = touch.clientX - gesture.x, dy = Math.abs(touch.clientY - gesture.y);
+    cancelAnimationFrame(gestureFrame); gestureFrame = 0; horizontalGesture = null;
+    moveGesture(gesture, dx);
+    const elapsed = Math.max(1, performance.now() - gesture.started), velocity = dx / elapsed;
+    if (dy < 100 && !gesture.open) {
+      const shouldOpen = -dx / gesture.width > 0.28 || velocity < -0.45;
+      if ($('#menu-drawer').open && $('#menu-drawer').classList.contains('drawer-dragging')) settleMenuDrawer(shouldOpen);
+      else if ($('#menu-drawer').open) settleMenuDrawer(true);
       else if (shouldOpen) openMenuDrawer();
-    } else if (dy < 100 && horizontalGesture.open) {
-      const shouldClose = dx / width > 0.28 || velocity > 0.45;
-      if (horizontalGesture.x !== undefined && $('#menu-drawer').classList.contains('drawer-dragging')) settleMenuDrawer(!shouldClose);
+    } else if (dy < 100 && gesture.open) {
+      const shouldClose = dx / gesture.width > 0.28 || velocity > 0.45;
+      if ($('#menu-drawer').classList.contains('drawer-dragging')) settleMenuDrawer(!shouldClose);
       else if (shouldClose) closeMenuDrawer();
-    }
-    horizontalGesture = null;
+    } else if (gesture.open) settleMenuDrawer(true);
+    else if ($('#menu-drawer').open) closeMenuDrawer(true);
   }, { passive: true });
   document.addEventListener('touchcancel', () => {
     if (!horizontalGesture) return;
+    cancelAnimationFrame(gestureFrame); gestureFrame = 0;
     if (horizontalGesture.open) settleMenuDrawer(true);
     else if ($('#menu-drawer').open) closeMenuDrawer(true);
     horizontalGesture = null;
@@ -603,15 +734,11 @@ function init() {
   $('#term-settings-form').addEventListener('submit', event => {
     event.preventDefault();
     const date = $('#term-start-date').value;
-    const parity = $('#term-start-parity').value;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T12:00:00Z`))) {
+    if (!isValidISODate(date)) {
       showToast('تاریخ شروع ترم را انتخاب کنید.');
       return;
     }
-    if (parity !== state.cycle.termStartParity) {
-      state.courses.forEach(course => { course.daysByWeek = [course.daysByWeek[1], course.daysByWeek[0]]; });
-    }
-    state.cycle = { termStartDate: date, termStartParity: parity };
+    state.cycle = { termStartDate: date };
     saveState(); render(); syncTermSettings(); showToast('تاریخ شروع ترم ذخیره شد.');
   });
   ['course-title', 'course-room', 'course-teacher', 'note-title', 'note-text'].forEach(id => {

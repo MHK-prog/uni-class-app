@@ -1,8 +1,8 @@
 // Keep in sync with APP_VERSION in app.js.
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 const CACHE_PREFIX = 'class-schedule-static-';
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}`;
-const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './fonts/Vazirmatn.woff2', './assets/icons/home.webp', './assets/icons/edit.webp', './assets/icons/setting.webp'];
+const ASSETS = ['./index.html', './styles.css', './app.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './fonts/Vazirmatn.woff2', './assets/icons/home.webp', './assets/icons/edit.webp', './assets/icons/setting.webp', './assets/icons/reload.webp'];
 
 
 self.addEventListener('install', event => {

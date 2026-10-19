@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.12.0';
+const APP_VERSION = '1.13.0';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -349,7 +349,9 @@ function createCourseCard(course, status, editable = false) {
   const title = document.createElement('h3'); title.textContent = course.title; info.append(title);
   if (editable) {
     const actions = document.createElement('div'); actions.className = 'card-actions';
-    const details = document.createElement('button'); details.type = 'button'; details.className = 'details-button secondary-button'; details.textContent = 'جزئیات'; details.setAttribute('aria-label', `جزئیات ${course.title}`); details.addEventListener('click', () => openCourseDetails(course));
+    const details = document.createElement('button'); details.type = 'button'; details.className = 'details-button secondary-button icon-action'; details.title = 'جزئیات درس'; details.setAttribute('aria-label', `جزئیات ${course.title}`);
+    const detailsIcon = document.createElement('img'); detailsIcon.src = 'assets/icons/eye_open.webp'; detailsIcon.alt = ''; detailsIcon.setAttribute('aria-hidden', 'true');
+    details.append(detailsIcon); details.addEventListener('click', () => openCourseDetails(course));
     actions.append(details); article.append(time, info, actions);
   } else {
     article.tabIndex = 0;
@@ -537,10 +539,12 @@ function renderNotesPage() {
     const heading = document.createElement('h2'); heading.textContent = note.title;
     const body = document.createElement('p'); body.textContent = note.text || '—';
     const actions = document.createElement('div'); actions.className = 'note-actions';
-    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'secondary-button';
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'secondary-button icon-action'; edit.title = 'ویرایش یادداشت'; edit.setAttribute('aria-label', `ویرایش یادداشت ${note.title}`);
     const editIcon = document.createElement('img'); editIcon.className = 'button-icon'; editIcon.src = 'assets/icons/edit.webp'; editIcon.alt = ''; editIcon.setAttribute('aria-hidden', 'true');
-    edit.append(editIcon, 'ویرایش'); edit.addEventListener('click', () => openNoteDialog(note));
-    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary-button note-delete'; remove.textContent = 'حذف'; remove.addEventListener('click', () => removeNote(note.id));
+    edit.append(editIcon); edit.addEventListener('click', () => openNoteDialog(note));
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary-button icon-action note-delete'; remove.title = 'حذف یادداشت'; remove.setAttribute('aria-label', `حذف یادداشت ${note.title}`);
+    const removeIcon = document.createElement('img'); removeIcon.src = 'assets/icons/delete.webp'; removeIcon.alt = ''; removeIcon.setAttribute('aria-hidden', 'true');
+    remove.append(removeIcon); remove.addEventListener('click', () => removeNote(note.id));
     actions.append(edit, remove); article.append(heading, body, actions); return article;
   }));
   $('#notes-empty').hidden = course.notes.length !== 0;

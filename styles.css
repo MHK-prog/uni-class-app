@@ -175,3 +175,15 @@ html,body{overscroll-behavior-y:none}
 .calendar-navigation{grid-template-columns:minmax(68px,1fr) auto minmax(68px,1fr);gap:6px}
 .calendar-navigation button{min-height:44px;padding-inline:8px;font-size:12px;white-space:nowrap}
 *{-webkit-tap-highlight-color:transparent}
+
+/* Icon-only actions keep the same large touch targets as text buttons. */
+.icon-action{display:inline-grid;place-items:center;flex:0 0 48px;width:48px;min-width:48px;height:48px;min-height:48px;padding:0!important}
+.icon-action img{display:block;width:28px;height:28px;margin:0;object-fit:contain}
+.icon-action .button-icon{margin:0}
+.icon-action:focus-visible{outline:2px solid var(--purple-soft);outline-offset:2px}
+.calendar-navigation button.icon-action{min-height:48px;padding:0}
+.calendar-actions .icon-action{min-width:48px}
+.details-actions button.icon-action{flex:0 0 52px}
+.icon-flip{transform:scaleX(-1)}
+.delete-course-button.icon-action{margin-inline-end:auto}
+.note-delete.icon-action{background:#29131b}

@@ -9,4 +9,4 @@ GitHub Actions builds and signs a release APK on pushes to `main`. Add these rep
 - `KEY_ALIAS`
 - `KEY_PASSWORD`
 
-The public APK download link is the latest release asset at `https://github.com/MHK-prog/uni-class-app/releases/latest/download/class-schedule.apk`.
+The public APK download link is the latest release asset at `https://github.com/MHK-prog/uni-class-app/releases/latest/download/app-release.apk`.

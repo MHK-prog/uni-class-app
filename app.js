@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.11.0';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -308,28 +308,25 @@ function selectedInfo(now = new Date()) {
 }
 
 function render(now = new Date()) {
-  const today = targetDay(0, now), tomorrow = targetDay(1, now);
+  const today = targetDay(0, now);
   if (selectedDateMode === 'today') selectedDateISO = today.iso;
-  else if (selectedDateMode === 'tomorrow') selectedDateISO = tomorrow.iso;
   const info = selectedInfo(now), current = iranParts(now);
   $('#iran-clock').textContent = toFaDigits(`${String(current.hour).padStart(2, '0')}:${String(current.minute).padStart(2, '0')}`);
   $('#selected-date').textContent = info.formatted;
-  $('#today-name').textContent = today.weekday; $('#tomorrow-name').textContent = tomorrow.weekday;
+  $('#today-name').textContent = today.weekday;
   $('#cycle-week-label').textContent = parityLabel(info.weekIndex);
-  const todayButton = $('.day-option[data-day="today"]'), tomorrowButton = $('.day-option[data-day="tomorrow"]');
-  [[todayButton, today.iso], [tomorrowButton, tomorrow.iso]].forEach(([button, iso]) => {
-    const active = info.iso === iso;
-    button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active));
-  });
-  const dateButton = $('#pick-date-button'), customDate = info.iso !== today.iso && info.iso !== tomorrow.iso;
-  dateButton.classList.toggle('active', customDate); dateButton.setAttribute('aria-pressed', String(customDate));
+  const isToday = info.iso === today.iso, todayButton = $('.day-option[data-day="today"]');
+  todayButton.classList.toggle('active', isToday); todayButton.setAttribute('aria-pressed', String(isToday));
+  const dateButton = $('#pick-date-button');
+  dateButton.classList.toggle('active', !isToday); dateButton.setAttribute('aria-pressed', String(!isToday));
   $('#picked-date-short').textContent = info.shortFormatted;
   $('#app-version').textContent = toFaDigits(APP_VERSION);
+  $('#drawer-app-version').textContent = toFaDigits(APP_VERSION);
   const matching = state.courses.filter(course => course.daysByWeek?.[info.weekIndex]?.includes(info.weekday) && course.start && course.end).sort((a, b) => a.start.localeCompare(b.start));
   const rendered = matching.map(course => ({ course, status: statusFor(course, info.currentMinutes, info.isToday) })).filter(item => !(info.isToday && item.status === 'done'));
   $('#empty-title').textContent = info.isToday
     ? matching.length ? 'کلاس‌های امروز تمام شده‌اند' : 'امروز کلاسی ندارید'
-    : info.iso === tomorrow.iso ? 'فردا کلاسی ندارید' : `${info.weekday} ${info.shortFormatted} کلاسی ندارید`;
+    : `${info.weekday} ${info.shortFormatted} کلاسی ندارید`;
   const list = $('#schedule-list');
   list.replaceChildren(...rendered.map(item => createCourseCard(item.course, item.status)));
   $('#empty-state').hidden = rendered.length !== 0; list.hidden = rendered.length === 0;
@@ -368,7 +365,11 @@ function createCourseCard(course, status, editable = false) {
     });
     const meta = document.createElement('div'); meta.className = 'course-meta';
     if (course.room) { const room = document.createElement('span'); room.className = 'meta-chip'; room.textContent = `اتاق ${course.room}`; meta.append(room); }
-    if (course.teacher) { const teacher = document.createElement('span'); teacher.className = 'meta-chip'; teacher.textContent = `استاد ${course.teacher}`; meta.append(teacher); }
+    if (course.teacher) {
+      const teacher = document.createElement('span'); teacher.className = 'meta-chip';
+      const icon = document.createElement('img'); icon.className = 'meta-icon'; icon.src = 'assets/icons/profile.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true');
+      teacher.append(icon, `استاد ${course.teacher}`); meta.append(teacher);
+    }
     if (meta.childElementCount) info.append(meta);
     article.append(time, info);
   }
@@ -524,7 +525,9 @@ function renderNotesPage() {
     const heading = document.createElement('h2'); heading.textContent = note.title;
     const body = document.createElement('p'); body.textContent = note.text || '—';
     const actions = document.createElement('div'); actions.className = 'note-actions';
-    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'secondary-button'; edit.textContent = 'ویرایش'; edit.addEventListener('click', () => openNoteDialog(note));
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'secondary-button';
+    const editIcon = document.createElement('img'); editIcon.className = 'button-icon'; editIcon.src = 'assets/icons/edit.webp'; editIcon.alt = ''; editIcon.setAttribute('aria-hidden', 'true');
+    edit.append(editIcon, 'ویرایش'); edit.addEventListener('click', () => openNoteDialog(note));
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary-button note-delete'; remove.textContent = 'حذف'; remove.addEventListener('click', () => removeNote(note.id));
     actions.append(edit, remove); article.append(heading, body, actions); return article;
   }));
@@ -595,8 +598,8 @@ async function importSchedule(file) {
 function init() {
   initDayPickers();
   document.querySelectorAll('.day-option[data-day]').forEach(button => button.addEventListener('click', () => {
-    selectedDateMode = button.dataset.day;
-    selectedDateISO = targetDay(selectedDateMode === 'tomorrow' ? 1 : 0).iso;
+    selectedDateMode = 'today';
+    selectedDateISO = targetDay(0).iso;
     render();
   }));
   $('#pick-date-button').addEventListener('click', () => openDatePicker('dashboard'));
@@ -610,7 +613,10 @@ function init() {
     if (calendarTarget === 'term') {
       $('#term-start-date').value = calendarDraftISO;
       syncTermSettings();
-    } else { selectedDateISO = calendarDraftISO; selectedDateMode = 'custom'; }
+    } else {
+      selectedDateISO = calendarDraftISO;
+      selectedDateMode = calendarDraftISO === targetDay(0).iso ? 'today' : 'custom';
+    }
     $('#date-picker-dialog').close();
     render();
   });

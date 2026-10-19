@@ -163,3 +163,14 @@ html,body{overscroll-behavior-y:none}
 .android-download{min-height:52px;text-decoration:none}
 .android-download-icon{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;background:#251b34;color:var(--purple-soft);font-size:22px}
 @media(prefers-reduced-motion:reduce){.refresh-button.refreshing img{animation:none}}
+
+/* Use the supplied icon set for navigation and common actions. */
+.icon-button img{display:block;width:24px;height:24px;object-fit:contain}
+.menu-button img{display:block;width:27px;height:27px;object-fit:contain}
+.menu-action{display:flex;align-items:center;gap:12px}
+.action-icon{display:block;width:28px;height:28px;flex:0 0 28px;object-fit:contain}
+.meta-icon{display:block;width:18px;height:18px;flex:0 0 18px;object-fit:contain}
+.button-icon{display:inline-block;width:22px;height:22px;margin-inline-end:7px;vertical-align:middle;object-fit:contain}
+.date-picker-trigger{justify-content:flex-start}
+.calendar-navigation{grid-template-columns:minmax(68px,1fr) auto minmax(68px,1fr);gap:6px}
+.calendar-navigation button{min-height:44px;padding-inline:8px;font-size:12px;white-space:nowrap}

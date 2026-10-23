@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.13.0';
+const APP_VERSION = '1.14.0';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -28,6 +28,8 @@ let drawerCloseTimer;
 let calendarTarget = 'dashboard';
 let calendarDraftISO = '';
 let calendarCursorISO = '';
+let pendingAmozeshyarCourses = null;
+let nativeBackupResolve = null;
 
 function loadState() {
   try {
@@ -76,6 +78,16 @@ function isValidISODate(value) {
 function validTime(value) { return typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value); }
 function makeId(seed = '') { return globalThis.crypto?.randomUUID?.() || `course-${Date.now()}-${seed}-${Math.random().toString(36).slice(2, 8)}`; }
 
+function normalizeChannelUrl(value) {
+  const input = String(value || '').trim();
+  if (!input) return '';
+  const candidate = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+  try {
+    const url = new URL(candidate);
+    return ['https:', 'http:'].includes(url.protocol) && url.hostname ? url.href : '';
+  } catch (error) { return ''; }
+}
+
 function normalizeDaysByWeek(raw, oldSettings, flipWeeks = false) {
   const normalizeRow = row => [...new Set((Array.isArray(row) ? row : []).filter(day => WEEK_DAY_ORDER.includes(day)))].sort((a, b) => WEEK_DAY_ORDER.indexOf(a) - WEEK_DAY_ORDER.indexOf(b));
   const finish = rows => flipWeeks ? [rows[1], rows[0]] : rows;
@@ -112,6 +124,7 @@ function normalizeCourses(items, oldSettings = normalizeLegacySettings(), flipWe
       end: validTime(raw.end) ? raw.end : '',
       className: toFaDigits(String(raw.className ?? raw.classroom ?? raw.room ?? '').trim()).slice(0, 50),
       teacher: toFaDigits(String(raw.teacher || '').trim()).slice(0, 80),
+      teacherChannel: normalizeChannelUrl(raw.teacherChannel),
       notes: normalizeNotes(raw.notes)
     };
   }).filter(Boolean);
@@ -201,7 +214,7 @@ function renderCalendar() {
 
 function openDatePicker(target) {
   calendarTarget = target;
-  calendarDraftISO = target === 'term' ? $('#term-start-date').value : selectedDateISO;
+  calendarDraftISO = target === 'term' ? state.cycle.termStartDate : selectedDateISO;
   if (!isValidISODate(calendarDraftISO)) calendarDraftISO = targetDay(0).iso;
   calendarCursorISO = calendarDraftISO;
   $('#calendar-title').textContent = target === 'term' ? 'تاریخ شروع ترم' : 'انتخاب تاریخ برنامه';
@@ -252,8 +265,7 @@ function currentSaturdayISO(now = new Date()) {
 }
 
 function syncTermSettings() {
-  const date = $('#term-start-date'), label = $('#term-start-date-label');
-  if (date) date.value = state.cycle.termStartDate;
+  const label = $('#term-start-date-label');
   if (label) label.textContent = jalaliDateFormatter.format(new Date(`${state.cycle.termStartDate}T12:00:00Z`));
 }
 
@@ -349,9 +361,7 @@ function createCourseCard(course, status, editable = false) {
   const title = document.createElement('h3'); title.textContent = course.title; info.append(title);
   if (editable) {
     const actions = document.createElement('div'); actions.className = 'card-actions';
-    const details = document.createElement('button'); details.type = 'button'; details.className = 'details-button secondary-button icon-action'; details.title = 'جزئیات درس'; details.setAttribute('aria-label', `جزئیات ${course.title}`);
-    const detailsIcon = document.createElement('img'); detailsIcon.src = 'assets/icons/eye_open.webp'; detailsIcon.alt = ''; detailsIcon.setAttribute('aria-hidden', 'true');
-    details.append(detailsIcon); details.addEventListener('click', () => openCourseDetails(course));
+    const details = document.createElement('button'); details.type = 'button'; details.className = 'details-button secondary-button'; details.textContent = 'جزئیات'; details.setAttribute('aria-label', `جزئیات ${course.title}`); details.addEventListener('click', () => openCourseDetails(course));
     actions.append(details); article.append(time, info, actions);
   } else {
     article.tabIndex = 0;
@@ -369,8 +379,7 @@ function createCourseCard(course, status, editable = false) {
     if (course.className) { const className = document.createElement('span'); className.className = 'meta-chip'; className.textContent = `کلاس ${course.className}`; meta.append(className); }
     if (course.teacher) {
       const teacher = document.createElement('span'); teacher.className = 'meta-chip';
-      const icon = document.createElement('img'); icon.className = 'meta-icon'; icon.src = 'assets/icons/profile.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true');
-      teacher.append(icon, `استاد ${course.teacher}`); meta.append(teacher);
+      teacher.textContent = `استاد ${course.teacher}`; meta.append(teacher);
     }
     if (meta.childElementCount) info.append(meta);
     article.append(time, info);
@@ -385,6 +394,7 @@ function openCourseDialog(course = null) {
   selectedDaysByWeek = course ? course.daysByWeek.map(days => [...days]) : [[], []];
   syncDayPickers();
   $('#course-start').value = course?.start || ''; $('#course-end').value = course?.end || ''; $('#course-class-name').value = course?.className || ''; $('#course-teacher').value = course?.teacher || '';
+  $('#course-teacher-channel').value = course?.teacherChannel || '';
   $('#delete-course-button').hidden = !course;
   showAppModal($('#course-dialog')); $('#course-title').focus();
 }
@@ -490,6 +500,12 @@ function openCourseDetails(course) {
   $('#details-days').textContent = formatDaysByWeek(course.daysByWeek);
   $('#details-class-name').textContent = course.className || 'ثبت نشده';
   $('#details-teacher').textContent = course.teacher || 'ثبت نشده';
+  const channel = normalizeChannelUrl(course.teacherChannel);
+  $('#details-teacher-channel').textContent = channel || 'ثبت نشده';
+  const channelButton = $('#course-channel-link-button');
+  channelButton.hidden = !channel;
+  if (channel) channelButton.href = channel;
+  else channelButton.removeAttribute('href');
   showAppModal(details);
 }
 
@@ -541,10 +557,10 @@ function renderNotesPage() {
     const actions = document.createElement('div'); actions.className = 'note-actions';
     const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'secondary-button icon-action'; edit.title = 'ویرایش یادداشت'; edit.setAttribute('aria-label', `ویرایش یادداشت ${note.title}`);
     const editIcon = document.createElement('img'); editIcon.className = 'button-icon'; editIcon.src = 'assets/icons/edit.webp'; editIcon.alt = ''; editIcon.setAttribute('aria-hidden', 'true');
-    edit.append(editIcon); edit.addEventListener('click', () => openNoteDialog(note));
+    edit.append(editIcon, 'ویرایش'); edit.addEventListener('click', () => openNoteDialog(note));
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary-button icon-action note-delete'; remove.title = 'حذف یادداشت'; remove.setAttribute('aria-label', `حذف یادداشت ${note.title}`);
     const removeIcon = document.createElement('img'); removeIcon.src = 'assets/icons/delete.webp'; removeIcon.alt = ''; removeIcon.setAttribute('aria-hidden', 'true');
-    remove.append(removeIcon); remove.addEventListener('click', () => removeNote(note.id));
+    remove.append(removeIcon, 'حذف'); remove.addEventListener('click', () => removeNote(note.id));
     actions.append(edit, remove); article.append(heading, body, actions); return article;
   }));
   $('#notes-empty').hidden = course.notes.length !== 0;
@@ -582,16 +598,265 @@ function showToast(message) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
 }
 
+function makeBackupFilename(prefix = 'class-schedule-backup') {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return prefix + '-' + stamp + '.json';
+}
+
+function backupPayload() {
+  return JSON.stringify({ formatVersion: 7, cycle: state.cycle, courses: state.courses }, null, 2);
+}
+
+function downloadBackup(payload, filename) {
+  const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url; link.download = filename; document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function exportSchedule() {
-  const payload = JSON.stringify({ formatVersion: 6, cycle: state.cycle, courses: state.courses }, null, 2);
+  const payload = backupPayload();
   if (window.AndroidScheduleBridge?.saveBackup) {
     window.AndroidScheduleBridge.saveBackup(payload);
     showToast('برای ذخیره، محل فایل را انتخاب کنید.');
     return;
   }
-  const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
-  const link = document.createElement('a'); link.href = url; link.download = 'class-schedule.json'; link.click(); URL.revokeObjectURL(url);
+  downloadBackup(payload, makeBackupFilename());
   showToast('نسخهٔ پشتیبان برنامه دانلود شد.');
+}
+
+window.onScheduleBackupResult = saved => {
+  const resolve = nativeBackupResolve;
+  nativeBackupResolve = null;
+  if (resolve) resolve(saved === true);
+};
+
+async function saveBackupBeforeImport() {
+  if (!state.courses.length) return true;
+  const payload = backupPayload(), filename = makeBackupFilename('class-schedule-before-amozeshyar-import');
+  if (window.AndroidScheduleBridge?.saveBackupForImport) {
+    return new Promise(resolve => {
+      const timeout = setTimeout(() => {
+        nativeBackupResolve = null;
+        resolve(false);
+      }, 5 * 60 * 1000);
+      nativeBackupResolve = saved => { clearTimeout(timeout); resolve(saved); };
+      try { window.AndroidScheduleBridge.saveBackupForImport(payload, filename); }
+      catch (error) { clearTimeout(timeout); nativeBackupResolve = null; resolve(false); }
+    });
+  }
+  downloadBackup(payload, filename);
+  return true;
+}
+
+function binaryStringToBytes(value) {
+  const bytes = new Uint8Array(value.length);
+  for (let index = 0; index < value.length; index += 1) bytes[index] = value.charCodeAt(index) & 0xff;
+  return bytes;
+}
+
+function decodeQuotedPrintable(value) {
+  const bytes = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index) & 0xff;
+    if (code === 61 && value[index + 1] === '\r' && value[index + 2] === '\n') { index += 2; continue; }
+    if (code === 61 && value[index + 1] === '\n') { index += 1; continue; }
+    if (code === 61 && /^[0-9a-f]{2}$/i.test(value.slice(index + 1, index + 3))) {
+      bytes.push(parseInt(value.slice(index + 1, index + 3), 16)); index += 2; continue;
+    }
+    bytes.push(code);
+  }
+  return new Uint8Array(bytes);
+}
+
+function decodeMhtPart(headers, body) {
+  const encoding = (headers.match(/content-transfer-encoding\s*:\s*([^\r\n;]+)/i)?.[1] || '').trim().toLowerCase();
+  let bytes;
+  if (encoding === 'quoted-printable') bytes = decodeQuotedPrintable(body);
+  else if (encoding === 'base64') {
+    const decoded = atob(body.replace(/\s/g, ''));
+    bytes = binaryStringToBytes(decoded);
+  } else bytes = binaryStringToBytes(body);
+  const charset = headers.match(/charset\s*=\s*["']?([^;"'\s]+)/i)?.[1] || 'utf-8';
+  try { return new TextDecoder(charset).decode(bytes); }
+  catch (error) { return new TextDecoder('utf-8').decode(bytes); }
+}
+
+async function readMhtHtml(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + 8192, bytes.length)));
+  }
+  const boundary = binary.slice(0, 8192).match(/boundary\s*=\s*(?:"([^"]+)"|'([^']+)'|([^;\s\r\n]+))/i);
+  const boundaryValue = boundary && (boundary[1] || boundary[2] || boundary[3]);
+  const parts = boundaryValue ? binary.split('--' + boundaryValue) : [binary];
+  for (const part of parts) {
+    const crlfSeparator = part.indexOf('\r\n\r\n');
+    const lfSeparator = part.indexOf('\n\n');
+    const separator = crlfSeparator >= 0 ? crlfSeparator : lfSeparator;
+    if (separator < 0) continue;
+    const separatorLength = separator === crlfSeparator ? 4 : 2;
+    const headers = part.slice(0, separator);
+    const body = part.slice(separator + separatorLength).replace(/\r?\n--?\s*$/, '');
+    const isHtmlPart = /content-type\s*:\s*text\/html/i.test(headers) || /<html[\s>]|<table[\s>]/i.test(body);
+    if (!isHtmlPart) continue;
+    const html = decodeMhtPart(headers, body);
+    if (/<html[\s>]|<table[\s>]/i.test(html)) return html;
+  }
+  const utf8 = new TextDecoder('utf-8').decode(bytes);
+  if (/<html[\s>]|<table[\s>]/i.test(utf8)) return utf8;
+  throw new Error('بخش HTML داخل فایل پیدا نشد؛ فایل MHT آموزشیار را دوباره ذخیره کنید.');
+}
+
+function normalizeAmozeshyarText(value) {
+  return String(value || '')
+    .replace(/[۰-۹٠-٩]/g, digit => {
+      const code = digit.charCodeAt(0);
+      return String(code >= 0x06f0 ? code - 0x06f0 : code - 0x0660);
+    })
+    .replace(/[يى]/g, 'ی').replace(/ك/g, 'ک')
+    .replace(/[\u064b-\u065f\u0670\u200c\u200f]/g, '')
+    .replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function parseAmozeshyarSchedule(value) {
+  const text = normalizeAmozeshyarText(value);
+  const markers = [...text.matchAll(/هفته\s*(فرد|زوج)/g)];
+  const segments = [];
+  if (!markers.length) segments.push({ parity: null, text });
+  else {
+    const preface = text.slice(0, markers[0].index);
+    if (preface.trim()) segments.push({ parity: null, text: preface });
+    markers.forEach((marker, index) => {
+      const start = marker.index + marker[0].length;
+      const end = markers[index + 1]?.index ?? text.length;
+      segments.push({ parity: marker[1] === 'زوج' ? 'even' : 'odd', text: text.slice(start, end) });
+    });
+  }
+
+  const grouped = new Map();
+  const dayMap = {
+    شنبه: 'شنبه', یکشنبه: 'یکشنبه', دوشنبه: 'دوشنبه', سهشنبه: 'سه‌شنبه',
+    چهارشنبه: 'چهارشنبه', پنجشنبه: 'پنجشنبه', جمعه: 'جمعه'
+  };
+  for (const segment of segments) {
+    const days = [...segment.text.matchAll(/یک\s*شنبه|دو\s*شنبه|سه\s*شنبه|چهار\s*شنبه|پنج\s*شنبه|جمعه|شنبه/g)];
+    const ranges = [...segment.text.matchAll(/(\d{1,2})\s*[:٫.]\s*(\d{2})\s*(?:تا|الی|[-–—])\s*(\d{1,2})\s*[:٫.]\s*(\d{2})/g)];
+    let cursor = 0, previousDays = [];
+    for (const range of ranges) {
+      const matchedDays = days
+        .filter(day => day.index >= cursor && day.index < range.index)
+        .map(day => dayMap[day[0].replace(/\s/g, '')])
+        .filter(Boolean);
+      if (matchedDays.length) previousDays = [...new Set(matchedDays)];
+      else if (!previousDays.length) {
+        previousDays = [...new Set(days.filter(day => day.index < range.index).map(day => dayMap[day[0].replace(/\s/g, '')]).filter(Boolean))];
+      }
+      cursor = range.index + range[0].length;
+      const startHour = Number(range[1]), startMinute = Number(range[2]);
+      const endHour = Number(range[3]), endMinute = Number(range[4]);
+      const start = String(startHour).padStart(2, '0') + ':' + String(startMinute).padStart(2, '0');
+      const end = String(endHour).padStart(2, '0') + ':' + String(endMinute).padStart(2, '0');
+      if (!previousDays.length || !validTime(start) || !validTime(end) || start >= end) continue;
+      const key = start + '-' + end;
+      if (!grouped.has(key)) grouped.set(key, { start, end, daysByWeek: [new Set(), new Set()] });
+      const group = grouped.get(key);
+      const weekIndexes = segment.parity === 'odd' ? [0] : segment.parity === 'even' ? [1] : [0, 1];
+      weekIndexes.forEach(weekIndex => previousDays.forEach(day => group.daysByWeek[weekIndex].add(day)));
+    }
+  }
+  return [...grouped.values()].map(group => ({
+    start: group.start,
+    end: group.end,
+    daysByWeek: group.daysByWeek.map(days => WEEK_DAY_ORDER.filter(day => days.has(day)))
+  }));
+}
+
+function parseAmozeshyarHtml(html) {
+  const parsedDocument = new DOMParser().parseFromString(html, 'text/html');
+  const table = parsedDocument.getElementById('panel__3');
+  if (!table) throw new Error('جدول دروس آموزشیار (panel__3) در فایل پیدا نشد.');
+  const rows = [...table.querySelectorAll('tr')];
+  if (rows.length < 2) throw new Error('جدول آموزشیار ردیف درسی ندارد.');
+  const getCells = row => [...row.children].filter(cell => /^(TH|TD)$/i.test(cell.tagName)).map(cell => {
+    const copy = cell.cloneNode(true);
+    copy.querySelectorAll('br').forEach(lineBreak => lineBreak.replaceWith(document.createTextNode(' ')));
+    copy.querySelectorAll('div,p,li').forEach(block => block.append(document.createTextNode(' ')));
+    return copy.textContent.replace(/\s+/g, ' ').trim();
+  });
+  const headers = getCells(rows[0]).map(header => normalizeAmozeshyarText(header).replace(/[\s:()（）\-–—_]/g, ''));
+  const findHeader = predicate => headers.findIndex(predicate);
+  const nameIndex = findHeader(header => header.includes('نامدرس'));
+  const teacherIndex = findHeader(header => header.includes('ناماستاد'));
+  const scheduleIndex = findHeader(header => header.includes('زمانبندی') && (header.includes('برگزاری') || header.includes('کلاس')));
+  const indexes = [nameIndex >= 0 ? nameIndex : 4, teacherIndex >= 0 ? teacherIndex : 11, scheduleIndex >= 0 ? scheduleIndex : 14];
+  const courses = [];
+  for (const row of rows.slice(1)) {
+    const cells = getCells(row);
+    if (cells.length <= Math.max(...indexes)) continue;
+    const title = cells[indexes[0]].trim();
+    if (!title) continue;
+    const teacher = cells[indexes[1]].trim();
+    const meetings = parseAmozeshyarSchedule(cells[indexes[2]]);
+    const courseBase = { title: toFaDigits(title), teacher: toFaDigits(teacher), teacherChannel: '', className: '', notes: [] };
+    if (!meetings.length) courses.push({ ...courseBase, id: makeId('amozeshyar'), daysByWeek: [[], []], start: '', end: '' });
+    else meetings.forEach(meeting => courses.push({ ...courseBase, ...meeting, id: makeId('amozeshyar') }));
+  }
+  if (!courses.length) throw new Error('هیچ درس معتبری در جدول آموزشیار پیدا نشد.');
+  return courses;
+}
+
+async function previewAmozeshyarFile(file) {
+  const error = $('#amozeshyar-error'), preview = $('#amozeshyar-preview');
+  error.hidden = true; preview.hidden = true; pendingAmozeshyarCourses = null;
+  try {
+    if (!file) return;
+    const html = await readMhtHtml(file);
+    const courses = normalizeCourses(parseAmozeshyarHtml(html));
+    const incomplete = courses.filter(course => !course.start || !course.end || !course.daysByWeek.some(days => days.length)).length;
+    $('#amozeshyar-summary').textContent = numberFa.format(courses.length) + ' درس پیدا شد؛ ' + numberFa.format(incomplete) + ' درس نیاز به بررسی دارد.';
+    $('#amozeshyar-apply-label').textContent = state.courses.length ? 'پشتیبان‌گیری و جایگزینی' : 'وارد کردن برنامه';
+    const list = $('#amozeshyar-preview-list'), items = courses.slice(0, 12).map(course => {
+      const item = document.createElement('li');
+      const time = course.start ? displayTime(course.start) + ' تا ' + displayTime(course.end) : 'زمان نیاز به تکمیل دارد';
+      const days = formatDaysByWeek(course.daysByWeek);
+      item.textContent = course.title + ' — ' + (course.teacher || 'استاد نامشخص') + ' — ' + time + ' — ' + days;
+      return item;
+    });
+    if (courses.length > items.length) {
+      const rest = document.createElement('li');
+      rest.textContent = 'و ' + numberFa.format(courses.length - items.length) + ' درس دیگر';
+      items.push(rest);
+    }
+    list.replaceChildren(...items);
+    pendingAmozeshyarCourses = courses; preview.hidden = false;
+  } catch (errorValue) {
+    error.textContent = errorValue.message || 'خواندن فایل آموزشیار ناموفق بود.';
+    error.hidden = false;
+  } finally { $('#amozeshyar-file').value = ''; }
+}
+
+async function applyAmozeshyarImport() {
+  if (!pendingAmozeshyarCourses?.length) return;
+  const replacingExisting = state.courses.length > 0;
+  if (replacingExisting && !window.confirm('برنامهٔ فعلی جایگزین شود؟ ابتدا از آن نسخهٔ پشتیبان ذخیره می‌شود.')) return;
+  const button = $('#apply-amozeshyar-import');
+  button.disabled = true;
+  try {
+    const backupSaved = await saveBackupBeforeImport();
+    if (!backupSaved) {
+      showToast('پشتیبان ذخیره نشد؛ برنامهٔ فعلی حفظ شد و واردسازی انجام نشد.');
+      return;
+    }
+    state = { cycle: state.cycle, courses: pendingAmozeshyarCourses };
+    saveState(); render(); syncTermSettings(); pendingAmozeshyarCourses = null;
+    $('#amozeshyar-preview').hidden = true;
+    switchPage('courses');
+    showToast(numberFa.format(state.courses.length) + (replacingExisting ? ' درس وارد شد؛ برنامهٔ قبلی پشتیبان‌گیری شد.' : ' درس وارد شد.'));
+  } catch (error) {
+    showToast('واردسازی انجام نشد: ' + (error.message || 'ذخیرهٔ پشتیبان ممکن نبود.'));
+  } finally { button.disabled = false; }
 }
 
 async function importSchedule(file) {
@@ -604,10 +869,10 @@ async function importSchedule(file) {
     const courseSettings = { ...oldSettings, anchorDate: cycle.termStartDate, anchorParity: oldParity, hasParity: true };
     const courses = normalizeCourses(parsed.courses, courseSettings, oldParity === 'even');
     if (parsed.courses.length && !courses.length) throw new Error('هیچ درس معتبری در فایل پیدا نشد.');
-    if (state.courses.length && !window.confirm('برنامهٔ فعلی با اطلاعات فایل جایگزین شود؟')) return;
+    if (state.courses.length && !window.confirm('برنامهٔ فعلی با اطلاعات فایل پشتیبان جایگزین شود؟')) return;
     state = { cycle, courses }; saveState(); render(); syncTermSettings();
-    showToast(`${numberFa.format(courses.length)} درس وارد شد.`);
-  } catch (error) { showToast(`وارد کردن فایل ناموفق بود: ${error.message || 'فایل JSON معتبر نیست.'}`); }
+    showToast(numberFa.format(courses.length) + ' درس از پشتیبان بازیابی شد.');
+  } catch (error) { showToast('بازیابی پشتیبان ناموفق بود: ' + (error.message || 'فایل JSON معتبر نیست.')); }
   finally { $('#import-file').value = ''; }
 }
 
@@ -623,12 +888,13 @@ function init() {
   $('#calendar-previous').addEventListener('click', () => { calendarCursorISO = shiftISODate(jalaliMonthStart(calendarCursorISO), -1); renderCalendar(); });
   $('#calendar-next').addEventListener('click', () => { calendarCursorISO = shiftISODate(jalaliMonthStart(calendarCursorISO), 40); renderCalendar(); });
   $('#calendar-today').addEventListener('click', () => { calendarDraftISO = targetDay(0).iso; calendarCursorISO = calendarDraftISO; renderCalendar(); });
-  $('#calendar-cancel').addEventListener('click', () => $('#date-picker-dialog').close());
   $('.close-calendar').addEventListener('click', () => $('#date-picker-dialog').close());
   $('#calendar-apply').addEventListener('click', () => {
     if (calendarTarget === 'term') {
-      $('#term-start-date').value = calendarDraftISO;
+      state.cycle = { termStartDate: calendarDraftISO };
+      saveState();
       syncTermSettings();
+      showToast('تاریخ شروع ترم تنظیم شد.');
     } else {
       selectedDateISO = calendarDraftISO;
       selectedDateMode = calendarDraftISO === targetDay(0).iso ? 'today' : 'custom';
@@ -637,7 +903,7 @@ function init() {
     render();
   });
   $('#refresh-button').addEventListener('click', async () => {
-    const button = $('#refresh-button'); button.classList.add('refreshing');
+    const button = $('#refresh-button'); closeMenuDrawer(); button.classList.add('refreshing');
     try { const registration = await navigator.serviceWorker?.getRegistration(); await registration?.update(); } catch (error) { console.warn('Could not check for app updates.', error); }
     window.location.reload();
   });
@@ -739,8 +1005,11 @@ function init() {
     horizontalGesture = null;
   }, { passive: true });
   document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => { switchPage(button.dataset.page); closeMenuDrawer(); }));
-  $('#import-button').addEventListener('click', () => $('#import-file').click());
   $('#export-button').addEventListener('click', exportSchedule);
+  $('#select-amozeshyar-file').addEventListener('click', () => $('#amozeshyar-file').click());
+  $('#amozeshyar-file').addEventListener('change', event => previewAmozeshyarFile(event.target.files?.[0]));
+  $('#apply-amozeshyar-import').addEventListener('click', applyAmozeshyarImport);
+  $('#restore-backup-button').addEventListener('click', () => $('#import-file').click());
   $('#import-file').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) importSchedule(file); });
   $('.close-dialog').addEventListener('click', () => $('#course-dialog').close());
   $('.cancel-dialog').addEventListener('click', () => $('#course-dialog').close());
@@ -751,6 +1020,12 @@ function init() {
     if (course) openCourseDialog(course);
   });
   $('#course-notes-button').addEventListener('click', () => openNotesPage(activeDetailsCourseId));
+  $('#course-channel-link-button').addEventListener('click', event => {
+    if (window.AndroidScheduleBridge?.openExternalUrl) {
+      event.preventDefault();
+      window.AndroidScheduleBridge.openExternalUrl(event.currentTarget.href);
+    }
+  });
   $('#back-to-courses').addEventListener('click', () => switchPage('courses'));
   $('#add-note-button').addEventListener('click', () => openNoteDialog());
   $('.close-note').addEventListener('click', () => $('#note-dialog').close());
@@ -768,16 +1043,6 @@ function init() {
     saveState(); $('#note-dialog').close(); renderNotesPage(); refreshCourseDetails();
     showToast(index >= 0 ? 'یادداشت ویرایش شد.' : 'یادداشت اضافه شد.');
   });
-  $('#term-settings-form').addEventListener('submit', event => {
-    event.preventDefault();
-    const date = $('#term-start-date').value;
-    if (!isValidISODate(date)) {
-      showToast('تاریخ شروع ترم را انتخاب کنید.');
-      return;
-    }
-    state.cycle = { termStartDate: date };
-    saveState(); render(); syncTermSettings(); showToast('تاریخ شروع ترم ذخیره شد.');
-  });
   ['course-title', 'course-class-name', 'course-teacher', 'note-title', 'note-text'].forEach(id => {
     $(`#${id}`).addEventListener('input', event => {
       const start = event.target.selectionStart, end = event.target.selectionEnd;
@@ -789,14 +1054,17 @@ function init() {
     event.preventDefault(); const values = new FormData(event.currentTarget);
     const title = toFaDigits(String(values.get('title') || '').trim());
     const start = String(values.get('start') || ''), end = String(values.get('end') || ''), error = $('#form-error');
+    const rawChannel = String(values.get('teacherChannel') || '').trim(), teacherChannel = normalizeChannelUrl(rawChannel);
     if (!title) { error.textContent = 'نام درس را وارد کنید.'; error.hidden = false; return; }
     if ((start && !end) || (!start && end)) { error.textContent = 'برای ساعت، شروع و پایان را با هم وارد کنید.'; error.hidden = false; return; }
     if (start && end && start >= end) { error.textContent = 'ساعت پایان باید بعد از ساعت شروع باشد.'; error.hidden = false; return; }
+    if (rawChannel && !teacherChannel) { error.textContent = 'لینک کانال باید یک نشانی معتبر وب باشد.'; error.hidden = false; return; }
     const id = String(values.get('id') || makeId()), previous = state.courses.find(item => item.id === id);
     const course = {
       id, title, daysByWeek: selectedDaysByWeek.map(days => [...days]), start, end,
       className: toFaDigits(String(values.get('className') || '').trim()),
       teacher: toFaDigits(String(values.get('teacher') || '').trim()),
+      teacherChannel,
       notes: previous?.notes || []
     };
     const index = state.courses.findIndex(item => item.id === id);

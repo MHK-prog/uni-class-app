@@ -33,6 +33,7 @@ public final class MainActivity extends Activity {
     private WebViewAssetLoader assetLoader;
     private ValueCallback<Uri[]> filePickerCallback;
     private String pendingBackupJson;
+    private boolean notifyBackupResult;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -100,16 +101,22 @@ public final class MainActivity extends Activity {
         }
         if (requestCode == SAVE_BACKUP_REQUEST) {
             Uri destination = resultCode == RESULT_OK && data != null ? data.getData() : null;
+            boolean saved = false;
             if (destination != null && pendingBackupJson != null) {
                 try (OutputStream output = getContentResolver().openOutputStream(destination)) {
                     if (output == null) throw new IllegalStateException("Could not open the selected file.");
                     output.write(pendingBackupJson.getBytes(StandardCharsets.UTF_8));
+                    saved = true;
                     Toast.makeText(this, "نسخهٔ پشتیبان ذخیره شد.", Toast.LENGTH_SHORT).show();
                 } catch (Exception error) {
                     Toast.makeText(this, "ذخیرهٔ نسخهٔ پشتیبان انجام نشد.", Toast.LENGTH_LONG).show();
                 }
             }
             pendingBackupJson = null;
+            if (notifyBackupResult) {
+                reportBackupResult(saved);
+            }
+            notifyBackupResult = false;
         }
     }
 
@@ -149,21 +156,51 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public void saveBackup(String json) {
-            if (json == null || json.isEmpty()) return;
-            runOnUiThread(() -> {
-                pendingBackupJson = json;
-                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("application/json");
-                intent.putExtra(Intent.EXTRA_TITLE, "class-schedule.json");
-                try {
-                    startActivityForResult(intent, SAVE_BACKUP_REQUEST);
-                } catch (Exception error) {
-                    pendingBackupJson = null;
-                    Toast.makeText(MainActivity.this, "ذخیرهٔ نسخهٔ پشتیبان ممکن نشد.", Toast.LENGTH_LONG).show();
-                }
-            });
+            requestBackupSave(json, "class-schedule.json", false);
         }
+
+        @JavascriptInterface
+        public void saveBackupForImport(String json, String filename) {
+            requestBackupSave(json, filename, true);
+        }
+
+        @JavascriptInterface
+        public void openExternalUrl(String value) {
+            Uri uri = Uri.parse(value);
+            String scheme = uri.getScheme();
+            if (uri.getHost() == null || !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))) return;
+            runOnUiThread(() -> MainActivity.this.openExternalUrl(uri));
+        }
+    }
+
+    private void requestBackupSave(String json, String filename, boolean notifyWeb) {
+        if (json == null || json.isEmpty()) {
+            if (notifyWeb) reportBackupResult(false);
+            return;
+        }
+        runOnUiThread(() -> {
+            pendingBackupJson = json;
+            notifyBackupResult = notifyWeb;
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("application/json");
+            String safeFilename = filename == null ? "class-schedule.json" : filename.replaceAll("[^A-Za-z0-9._-]", "_");
+            if (!safeFilename.toLowerCase().endsWith(".json")) safeFilename += ".json";
+            intent.putExtra(Intent.EXTRA_TITLE, safeFilename);
+            try {
+                startActivityForResult(intent, SAVE_BACKUP_REQUEST);
+            } catch (Exception error) {
+                pendingBackupJson = null;
+                notifyBackupResult = false;
+                if (notifyWeb) reportBackupResult(false);
+                Toast.makeText(MainActivity.this, "ذخیرهٔ نسخهٔ پشتیبان ممکن نشد.", Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void reportBackupResult(boolean saved) {
+        if (webView == null) return;
+        webView.post(() -> webView.evaluateJavascript("window.onScheduleBackupResult && window.onScheduleBackupResult(" + saved + ")", null));
     }
 
     private final class AppWebViewClient extends WebViewClientCompat {
@@ -191,7 +228,8 @@ public final class MainActivity extends Activity {
     }
 
     private boolean openExternalUrl(Uri uri) {
-        if (!"https".equalsIgnoreCase(uri.getScheme()) || APP_HOST.equalsIgnoreCase(uri.getHost())) return false;
+        String scheme = uri.getScheme();
+        if (!("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme)) || APP_HOST.equalsIgnoreCase(uri.getHost())) return false;
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, uri));
             return true;

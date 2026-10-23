@@ -16,8 +16,7 @@
     <header class="topbar">
       <a class="brand" href="./index.html" aria-label="برنامهٔ کلاس‌ها"><strong>کلاس‌های من</strong></a>
       <div class="top-actions">
-        <button class="menu-button" id="menu-button" type="button" aria-label="باز کردن منو" aria-haspopup="dialog" aria-expanded="false" aria-controls="menu-drawer"><img src="assets/icons/menu.webp" width="26" height="26" alt="" aria-hidden="true"><i class="incomplete-indicator" aria-hidden="true" hidden></i></button>
-        <button class="icon-button refresh-button" id="refresh-button" type="button" aria-label="تازه‌سازی برنامه"><img src="assets/icons/reload.webp" width="26" height="26" alt="" aria-hidden="true"></button>
+        <button class="menu-button" id="menu-button" type="button" aria-label="باز کردن منو" aria-haspopup="dialog" aria-expanded="false" aria-controls="menu-drawer"><img src="assets/icons/menu.webp" width="26" height="26" alt="" aria-hidden="true"><span>منو</span><i class="incomplete-indicator" aria-hidden="true" hidden></i></button>
       </div>
     </header>
 
@@ -34,20 +33,20 @@
         <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
         <div id="empty-state" class="empty-state" hidden><p id="empty-title">امروز کلاسی ندارید</p></div>
       </section>
-      <footer class="app-footer">نسخهٔ <span id="app-version">۱.۱۳.۰</span></footer>
+      <footer class="app-footer">نسخهٔ <span id="app-version">۱.۱۴.۰</span></footer>
     </section>
 
     <section class="app-page" id="page-courses" data-page-panel="courses" hidden>
-      <div class="page-heading"><h1>درس‌ها</h1><button class="primary-button icon-action" id="add-course-button" type="button" aria-label="افزودن درس" title="افزودن درس"><img src="assets/icons/add.webp" width="28" height="28" alt="" aria-hidden="true"></button></div>
+      <div class="page-heading"><h1>درس‌ها</h1><button class="primary-button icon-action" id="add-course-button" type="button" aria-label="افزودن درس"><img src="assets/icons/add.webp" width="24" height="24" alt="" aria-hidden="true"><span>افزودن درس</span></button></div>
       <div id="manage-course-list" class="schedule-list"></div>
       <div id="manage-empty" class="empty-state" hidden><p>هنوز درسی اضافه نکرده‌اید.</p></div>
     </section>
 
     <section class="app-page notes-page" id="page-notes" data-page-panel="notes" hidden>
       <div class="page-heading notes-heading">
-        <button class="secondary-button icon-action" id="back-to-courses" type="button" aria-label="بازگشت به درس‌ها" title="بازگشت"><img src="assets/icons/back.webp" width="28" height="28" alt="" aria-hidden="true"></button>
+        <button class="secondary-button icon-action" id="back-to-courses" type="button" aria-label="بازگشت به درس‌ها"><img src="assets/icons/back.webp" width="24" height="24" alt="" aria-hidden="true"><span>بازگشت</span></button>
         <div><h1>یادداشت‌ها</h1><small id="notes-course-name"></small></div>
-        <button class="primary-button icon-action" id="add-note-button" type="button" aria-label="افزودن یادداشت" title="افزودن یادداشت"><img src="assets/icons/add.webp" width="28" height="28" alt="" aria-hidden="true"></button>
+        <button class="primary-button icon-action" id="add-note-button" type="button" aria-label="افزودن یادداشت"><img src="assets/icons/add.webp" width="24" height="24" alt="" aria-hidden="true"><span>افزودن</span></button>
       </div>
       <div id="notes-list" class="notes-list"></div>
       <div id="notes-empty" class="empty-state" hidden><p>یادداشتی ثبت نشده.</p></div>
@@ -55,15 +54,31 @@
 
     <section class="app-page settings-page" id="page-settings" data-page-panel="settings" hidden>
       <h1>تنظیمات</h1>
-      <form id="term-settings-form" class="settings-form term-settings-form">
+      <div class="settings-form term-settings-form">
         <label class="field-label">تاریخ شروع ترم<button class="date-picker-trigger" id="term-start-date-picker" type="button" aria-haspopup="dialog" aria-controls="date-picker-dialog"><span id="term-start-date-label">—</span></button></label>
-        <input id="term-start-date" name="termStartDate" type="hidden" required>
-        <button class="secondary-button icon-action" type="submit" aria-label="ذخیرهٔ تنظیمات" title="ذخیره"><img src="assets/icons/check.webp" width="28" height="28" alt="" aria-hidden="true"></button>
-      </form>
+      </div>
       <div class="settings-actions">
-        <a class="menu-action android-download" id="android-download-link" href="https://github.com/MHK-prog/uni-class-app/releases/latest/download/app-release.apk"><img class="action-icon" src="assets/icons/download.webp" width="26" height="26" alt="" aria-hidden="true">دانلود برنامهٔ اندروید</a>
-        <button class="menu-action" id="import-button" type="button"><img class="action-icon" src="assets/icons/upload.webp" width="26" height="26" alt="" aria-hidden="true">ورود برنامه</button>
-        <button class="menu-action" id="export-button" type="button"><img class="action-icon" src="assets/icons/archive.webp" width="26" height="26" alt="" aria-hidden="true">ذخیرهٔ پشتیبان</button>
+        <button class="menu-action" id="export-button" type="button"><img class="action-icon" src="assets/icons/download.webp" width="26" height="26" alt="" aria-hidden="true">ذخیرهٔ پشتیبان</button>
+      </div>
+    </section>
+
+    <section class="app-page import-page" id="page-amozeshyar" data-page-panel="amozeshyar" hidden>
+      <h1>وارد کردن از سایت آموزشیار</h1>
+      <div class="import-panel">
+        <p>فایل ذخیره‌شدهٔ آموزشیار با پسوند MHT یا MHTML را انتخاب کنید.</p>
+        <input id="amozeshyar-file" type="file" accept=".mht,.mhtml,application/x-mimearchive,message/rfc822" hidden>
+        <button class="secondary-button" id="select-amozeshyar-file" type="button">انتخاب فایل MHT</button>
+        <p id="amozeshyar-error" class="form-error" role="alert" hidden></p>
+        <section id="amozeshyar-preview" class="import-preview" hidden>
+          <p id="amozeshyar-summary"></p>
+          <ul id="amozeshyar-preview-list"></ul>
+          <p class="import-note">اگر برنامه‌ای ثبت کرده باشید، پیش از جایگزینی نسخهٔ پشتیبان ساخته می‌شود.</p>
+          <button class="primary-button icon-action" id="apply-amozeshyar-import" type="button"><img src="assets/icons/check.webp" width="24" height="24" alt="" aria-hidden="true"><span id="amozeshyar-apply-label">وارد کردن برنامه</span></button>
+        </section>
+        <div class="import-backup-actions">
+          <h2>پشتیبان برنامه</h2>
+          <button class="secondary-button" id="restore-backup-button" type="button">بارگذاری فایل پشتیبان</button>
+        </div>
       </div>
     </section>
   </main>
@@ -71,17 +86,19 @@
   <input id="import-file" type="file" accept="application/json,.json" hidden>
   <dialog id="menu-drawer" class="menu-drawer" aria-label="منو">
     <div class="dialog-heading"><h2>منو</h2><button type="button" class="icon-button close-menu" aria-label="بستن منو"><img src="assets/icons/close.webp" width="24" height="24" alt="" aria-hidden="true"></button></div>
-    <button class="menu-action page-link active" type="button" data-page="dashboard"><img class="menu-item-icon" src="assets/icons/home.webp" width="24" height="24" alt="" aria-hidden="true">برنامه</button>
-    <button class="menu-action page-link" type="button" data-page="courses"><img class="menu-item-icon" src="assets/icons/edit.webp" width="24" height="24" alt="" aria-hidden="true">مدیریت درس‌ها</button>
-    <button class="menu-action page-link" type="button" data-page="settings"><img class="menu-item-icon" src="assets/icons/setting.webp" width="24" height="24" alt="" aria-hidden="true">تنظیمات</button>
-    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">۱.۱۳.۰</span></footer>
+    <button class="menu-action page-link active" type="button" data-page="dashboard">برنامه</button>
+    <button class="menu-action page-link" type="button" data-page="courses">مدیریت درس‌ها</button>
+    <button class="menu-action page-link" type="button" data-page="amozeshyar">وارد کردن از آموزشیار</button>
+    <button class="menu-action page-link" type="button" data-page="settings">تنظیمات</button>
+    <button class="menu-action refresh-button" id="refresh-button" type="button"><img class="menu-item-icon" src="assets/icons/reload.webp" width="24" height="24" alt="" aria-hidden="true"><span>همگام‌سازی برنامه</span></button>
+    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">۱.۱۴.۰</span></footer>
   </dialog>
   <dialog id="date-picker-dialog" class="date-picker-dialog" aria-labelledby="calendar-title">
     <div class="dialog-heading"><h2 id="calendar-title">انتخاب تاریخ</h2><button type="button" class="icon-button close-calendar" aria-label="بستن"><img src="assets/icons/close.webp" width="24" height="24" alt="" aria-hidden="true"></button></div>
-    <div class="calendar-navigation"><button type="button" class="secondary-button icon-action" id="calendar-previous" aria-label="ماه قبل" title="ماه قبل"><img src="assets/icons/back.webp" width="26" height="26" alt="" aria-hidden="true"></button><strong id="calendar-month">—</strong><button type="button" class="secondary-button icon-action" id="calendar-next" aria-label="ماه بعد" title="ماه بعد"><img class="icon-flip" src="assets/icons/back.webp" width="26" height="26" alt="" aria-hidden="true"></button></div>
+    <div class="calendar-navigation"><button type="button" class="secondary-button icon-action" id="calendar-previous" aria-label="ماه قبل"><img src="assets/icons/back.webp" width="24" height="24" alt="" aria-hidden="true"><span>ماه قبل</span></button><strong id="calendar-month">—</strong><button type="button" class="secondary-button icon-action" id="calendar-next" aria-label="ماه بعد"><img src="assets/icons/back.webp" width="24" height="24" alt="" aria-hidden="true"><span>ماه بعد</span></button></div>
     <div class="calendar-weekdays" aria-hidden="true"><span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span></div>
     <div class="calendar-grid" id="calendar-grid" role="group" aria-label="روزهای ماه"></div>
-    <div class="calendar-actions"><button class="secondary-button icon-action" id="calendar-today" type="button" aria-label="رفتن به امروز" title="امروز"><img src="assets/icons/sun.webp" width="28" height="28" alt="" aria-hidden="true"></button><button class="secondary-button icon-action" id="calendar-cancel" type="button" aria-label="بستن انتخاب تاریخ" title="بستن"><img src="assets/icons/close.webp" width="28" height="28" alt="" aria-hidden="true"></button><button class="primary-button icon-action" id="calendar-apply" type="button" aria-label="انتخاب این تاریخ" title="انتخاب"><img src="assets/icons/check.webp" width="28" height="28" alt="" aria-hidden="true"></button></div>
+    <div class="calendar-actions"><button class="secondary-button" id="calendar-today" type="button">امروز</button><button class="primary-button icon-action" id="calendar-apply" type="button"><img src="assets/icons/check.webp" width="24" height="24" alt="" aria-hidden="true"><span>انتخاب</span></button></div>
   </dialog>
   <dialog id="course-dialog" class="course-dialog">
     <form id="course-form" novalidate>
@@ -102,8 +119,11 @@
         <label class="field-label">نام استاد<input name="teacher" id="course-teacher" maxlength="80" placeholder="اختیاری"></label>
       </div>
       <p id="form-error" class="form-error" role="alert" hidden></p>
-      <div class="dialog-actions"><button type="button" class="secondary-button icon-action cancel-dialog" aria-label="لغو و بستن" title="لغو"><img src="assets/icons/back.webp" width="28" height="28" alt="" aria-hidden="true"></button><button type="submit" class="primary-button icon-action" aria-label="ذخیرهٔ درس" title="ذخیره"><img src="assets/icons/check.webp" width="28" height="28" alt="" aria-hidden="true"></button></div>
-      <button type="button" class="delete-course-button icon-action" id="delete-course-button" aria-label="حذف درس" title="حذف درس" hidden><img src="assets/icons/delete.webp" width="28" height="28" alt="" aria-hidden="true"></button>
+      <div class="field-row full-field">
+        <label class="field-label">لینک کانال استاد<input name="teacherChannel" id="course-teacher-channel" type="url" inputmode="url" maxlength="300" placeholder="https://..."></label>
+      </div>
+      <div class="dialog-actions"><button type="button" class="secondary-button icon-action cancel-dialog"><img src="assets/icons/close.webp" width="24" height="24" alt="" aria-hidden="true"><span>لغو</span></button><button type="submit" class="primary-button icon-action"><img src="assets/icons/check.webp" width="24" height="24" alt="" aria-hidden="true"><span>ذخیره</span></button></div>
+      <button type="button" class="delete-course-button icon-action" id="delete-course-button" hidden><img src="assets/icons/delete.webp" width="24" height="24" alt="" aria-hidden="true"><span>حذف درس</span></button>
     </form>
   </dialog>
   <dialog id="course-details-dialog" class="course-details-dialog">
@@ -113,10 +133,12 @@
       <div><dt>روزهای برگزاری</dt><dd id="details-days"></dd></div>
       <div><dt>نام کلاس</dt><dd id="details-class-name"></dd></div>
       <div><dt>استاد</dt><dd id="details-teacher"></dd></div>
+      <div><dt>کانال استاد</dt><dd id="details-teacher-channel"></dd></div>
     </dl>
     <div class="details-actions">
-      <button type="button" class="secondary-button icon-action" id="course-notes-button" aria-label="یادداشت‌های درس" title="یادداشت‌ها"><img src="assets/icons/messages.webp" width="28" height="28" alt="" aria-hidden="true"></button>
-      <button type="button" class="primary-button icon-action" id="edit-course-from-details" aria-label="ویرایش درس" title="ویرایش درس"><img src="assets/icons/edit.webp" width="28" height="28" alt="" aria-hidden="true"></button>
+      <button type="button" class="secondary-button" id="course-notes-button">یادداشت‌ها</button>
+      <button type="button" class="primary-button icon-action" id="edit-course-from-details"><img src="assets/icons/edit.webp" width="24" height="24" alt="" aria-hidden="true"><span>ویرایش درس</span></button>
+      <a class="secondary-button channel-link-button" id="course-channel-link-button" target="_blank" rel="noopener noreferrer" hidden>رفتن به کانال استاد</a>
     </div>
   </dialog>
   <dialog id="note-dialog" class="course-dialog note-dialog">
@@ -126,7 +148,7 @@
       <label class="field-label">عنوان<input id="note-title" maxlength="100" required></label>
       <label class="field-label">متن<textarea id="note-text" rows="7" maxlength="5000"></textarea></label>
       <p id="note-error" class="form-error" role="alert" hidden></p>
-      <div class="dialog-actions"><button type="button" class="secondary-button icon-action cancel-note" aria-label="لغو و بستن" title="لغو"><img src="assets/icons/back.webp" width="28" height="28" alt="" aria-hidden="true"></button><button type="submit" class="primary-button icon-action" aria-label="ذخیرهٔ یادداشت" title="ذخیره"><img src="assets/icons/check.webp" width="28" height="28" alt="" aria-hidden="true"></button></div>
+      <div class="dialog-actions"><button type="button" class="secondary-button icon-action cancel-note"><img src="assets/icons/close.webp" width="24" height="24" alt="" aria-hidden="true"><span>لغو</span></button><button type="submit" class="primary-button icon-action"><img src="assets/icons/check.webp" width="24" height="24" alt="" aria-hidden="true"><span>ذخیره</span></button></div>
     </form>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

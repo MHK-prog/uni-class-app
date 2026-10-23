@@ -1,16 +1,13 @@
 // Keep in sync with APP_VERSION in app.js.
-const APP_VERSION = '1.13.0';
+const APP_VERSION = '1.14.0';
 const CACHE_PREFIX = 'class-schedule-static-';
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}`;
 const ASSETS = [
   './index.html', './styles.css', './app.js', './manifest.webmanifest', './icon.svg',
   './icon-192.png', './icon-512.png', './fonts/Vazirmatn.woff2',
-  './assets/icons/add.webp', './assets/icons/archive.webp', './assets/icons/back.webp',
-  './assets/icons/check.webp', './assets/icons/close.webp', './assets/icons/delete.webp',
-  './assets/icons/download.webp', './assets/icons/edit.webp', './assets/icons/eye_open.webp',
-  './assets/icons/home.webp', './assets/icons/menu.webp', './assets/icons/messages.webp',
-  './assets/icons/profile.webp', './assets/icons/reload.webp', './assets/icons/setting.webp',
-  './assets/icons/sun.webp', './assets/icons/upload.webp'
+  './assets/icons/add.webp', './assets/icons/back.webp', './assets/icons/check.webp',
+  './assets/icons/close.webp', './assets/icons/delete.webp', './assets/icons/download.webp',
+  './assets/icons/edit.webp', './assets/icons/menu.webp', './assets/icons/reload.webp'
 ];
 
 

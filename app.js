@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '1.14.1';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -214,7 +214,7 @@ function renderCalendar() {
 
 function openDatePicker(target) {
   calendarTarget = target;
-  calendarDraftISO = target === 'term' ? state.cycle.termStartDate : selectedDateISO;
+  calendarDraftISO = target === 'term' ? state.cycle.termStartDate : targetDay(1).iso;
   if (!isValidISODate(calendarDraftISO)) calendarDraftISO = targetDay(0).iso;
   calendarCursorISO = calendarDraftISO;
   $('#calendar-title').textContent = target === 'term' ? 'تاریخ شروع ترم' : 'انتخاب تاریخ برنامه';
@@ -807,6 +807,62 @@ function parseAmozeshyarHtml(html) {
   return courses;
 }
 
+function courseMatchKey(value) {
+  return normalizeAmozeshyarText(value).toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g, '');
+}
+
+function courseMatchScore(incoming, previous) {
+  let score = 0;
+  if (incoming.start && incoming.start === previous.start) score += 2;
+  if (incoming.end && incoming.end === previous.end) score += 2;
+  for (let week = 0; week < 2; week += 1) {
+    const oldDays = new Set(previous.daysByWeek[week]);
+    score += incoming.daysByWeek[week].filter(day => oldDays.has(day)).length;
+  }
+  return score;
+}
+
+function findPreviousCourseForImport(incoming, previousCourses) {
+  let candidates = previousCourses.filter(course => courseMatchKey(course.title) === courseMatchKey(incoming.title));
+  if (!candidates.length) return null;
+  if (candidates.length === 1) return candidates[0];
+
+  if (incoming.teacher) {
+    const sameTeacher = candidates.filter(course => courseMatchKey(course.teacher) === courseMatchKey(incoming.teacher));
+    if (sameTeacher.length) candidates = sameTeacher;
+  }
+  if (candidates.length === 1) return candidates[0];
+
+  const scored = candidates.map(course => ({ course, score: courseMatchScore(incoming, course) }));
+  const highestScore = Math.max(...scored.map(item => item.score));
+  const bestMatches = scored.filter(item => item.score === highestScore && highestScore > 0);
+  return bestMatches.length === 1 ? bestMatches[0].course : null;
+}
+
+function mergeImportedNotes(importedNotes, previousNotes) {
+  const seen = new Set();
+  return [...normalizeNotes(importedNotes), ...normalizeNotes(previousNotes)].filter(note => {
+    const key = `${courseMatchKey(note.title)}|${note.text.trim()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function enrichImportedCourses(importedCourses, previousCourses) {
+  return importedCourses.map(course => {
+    const previous = findPreviousCourseForImport(course, previousCourses);
+    if (!previous) return course;
+    return {
+      ...course,
+      className: course.className || previous.className,
+      teacher: course.teacher || previous.teacher,
+      teacherChannel: course.teacherChannel || previous.teacherChannel,
+      notes: mergeImportedNotes(course.notes, previous.notes)
+    };
+  });
+}
+
 async function previewAmozeshyarFile(file) {
   const error = $('#amozeshyar-error'), preview = $('#amozeshyar-preview');
   error.hidden = true; preview.hidden = true; pendingAmozeshyarCourses = null;
@@ -815,7 +871,8 @@ async function previewAmozeshyarFile(file) {
     const html = await readMhtHtml(file);
     const courses = normalizeCourses(parseAmozeshyarHtml(html));
     const incomplete = courses.filter(course => !course.start || !course.end || !course.daysByWeek.some(days => days.length)).length;
-    $('#amozeshyar-summary').textContent = numberFa.format(courses.length) + ' درس پیدا شد؛ ' + numberFa.format(incomplete) + ' درس نیاز به بررسی دارد.';
+    const enrichedCount = courses.filter(course => findPreviousCourseForImport(course, state.courses)).length;
+    $('#amozeshyar-summary').textContent = numberFa.format(courses.length) + ' درس پیدا شد؛ ' + numberFa.format(incomplete) + ' درس نیاز به بررسی دارد.' + (enrichedCount ? ' اطلاعات تکمیلی ' + numberFa.format(enrichedCount) + ' درس از برنامهٔ قبلی حفظ می‌شود.' : '');
     $('#amozeshyar-apply-label').textContent = state.courses.length ? 'پشتیبان‌گیری و جایگزینی' : 'وارد کردن برنامه';
     const list = $('#amozeshyar-preview-list'), items = courses.slice(0, 12).map(course => {
       const item = document.createElement('li');
@@ -849,7 +906,7 @@ async function applyAmozeshyarImport() {
       showToast('پشتیبان ذخیره نشد؛ برنامهٔ فعلی حفظ شد و واردسازی انجام نشد.');
       return;
     }
-    state = { cycle: state.cycle, courses: pendingAmozeshyarCourses };
+    state = { cycle: state.cycle, courses: enrichImportedCourses(pendingAmozeshyarCourses, state.courses) };
     saveState(); render(); syncTermSettings(); pendingAmozeshyarCourses = null;
     $('#amozeshyar-preview').hidden = true;
     switchPage('courses');
@@ -951,12 +1008,11 @@ function init() {
       return;
     }
     const touch = event.touches[0], drawer = $('#menu-drawer');
-    const fromRightEdge = touch.clientX >= window.innerWidth - 40;
-    const onPageSwipeSurface = event.target.closest('.app-shell') && !event.target.closest('input,select,textarea');
+    const fromRightEdge = touch.clientX >= window.innerWidth - 24 && !event.target.closest('input,select,textarea');
     const open = drawer.open;
     const width = open ? Math.max(1, drawer.offsetWidth) : Math.max(1, Math.min(window.innerWidth * 0.75, 420));
     horizontalGesture = open ? (drawer.contains(event.target) ? { x: touch.clientX, y: touch.clientY, open, width, started: performance.now() } : null)
-      : (fromRightEdge || onPageSwipeSurface) ? { x: touch.clientX, y: touch.clientY, open, width, started: performance.now() } : null;
+      : fromRightEdge ? { x: touch.clientX, y: touch.clientY, open, width, started: performance.now() } : null;
   }, { passive: true });
   document.addEventListener('touchmove', event => {
     if (!horizontalGesture || event.touches.length !== 1) return;
@@ -982,7 +1038,7 @@ function init() {
     moveGesture(gesture, dx);
     const elapsed = Math.max(1, performance.now() - gesture.started), velocity = dx / elapsed;
     if (dy < 100 && !gesture.open) {
-      const shouldOpen = -dx / gesture.width > 0.28 || velocity < -0.45;
+      const shouldOpen = dx <= -48 || (dx <= -24 && velocity < -0.45);
       if (shouldOpen) suppressBackdropClickAt(touch);
       if ($('#menu-drawer').open && $('#menu-drawer').classList.contains('drawer-dragging')) settleMenuDrawer(shouldOpen);
       else if ($('#menu-drawer').open) settleMenuDrawer(true);

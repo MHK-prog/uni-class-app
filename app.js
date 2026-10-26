@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.14.2';
+const APP_VERSION = '1.14.3';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];

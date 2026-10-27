@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.14.3';
+const APP_VERSION = '1.15.0';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -88,6 +88,17 @@ function normalizeChannelUrl(value) {
   } catch (error) { return ''; }
 }
 
+function normalizeCourseLinks(items, legacyChannel = '') {
+  const links = (Array.isArray(items) ? items : []).map((raw, index) => ({
+    id: String(raw?.id || makeId(`link-${index}`)),
+    title: toFaDigits(String(raw?.title || raw?.label || '').trim()).slice(0, 80),
+    url: normalizeChannelUrl(raw?.url || raw?.href || '')
+  })).filter(link => link.title && link.url);
+  if (links.length) return links;
+  const oldUrl = normalizeChannelUrl(legacyChannel);
+  return oldUrl ? [{ id: makeId('legacy-link'), title: 'کانال استاد', url: oldUrl }] : [];
+}
+
 function normalizeDaysByWeek(raw, oldSettings, flipWeeks = false) {
   const normalizeRow = row => [...new Set((Array.isArray(row) ? row : []).filter(day => WEEK_DAY_ORDER.includes(day)))].sort((a, b) => WEEK_DAY_ORDER.indexOf(a) - WEEK_DAY_ORDER.indexOf(b));
   const finish = rows => flipWeeks ? [rows[1], rows[0]] : rows;
@@ -124,7 +135,7 @@ function normalizeCourses(items, oldSettings = normalizeLegacySettings(), flipWe
       end: validTime(raw.end) ? raw.end : '',
       className: toFaDigits(String(raw.className ?? raw.classroom ?? raw.room ?? '').trim()).slice(0, 50),
       teacher: toFaDigits(String(raw.teacher || '').trim()).slice(0, 80),
-      teacherChannel: normalizeChannelUrl(raw.teacherChannel),
+      links: normalizeCourseLinks(raw.links, raw.teacherChannel),
       notes: normalizeNotes(raw.notes)
     };
   }).filter(Boolean);
@@ -335,7 +346,7 @@ function render(now = new Date()) {
   $('#app-version').textContent = toFaDigits(APP_VERSION);
   $('#drawer-app-version').textContent = toFaDigits(APP_VERSION);
   const matching = state.courses.filter(course => course.daysByWeek?.[info.weekIndex]?.includes(info.weekday) && course.start && course.end).sort((a, b) => a.start.localeCompare(b.start));
-  const rendered = matching.map(course => ({ course, status: statusFor(course, info.currentMinutes, info.isToday) })).filter(item => !(info.isToday && item.status === 'done'));
+  const rendered = matching.map(course => ({ course, status: statusFor(course, info.currentMinutes, info.isToday) }));
   $('#empty-title').textContent = info.isToday
     ? matching.length ? 'کلاس‌های امروز تمام شده‌اند' : 'امروز کلاسی ندارید'
     : `${info.weekday} ${info.shortFormatted} کلاسی ندارید`;
@@ -387,6 +398,48 @@ function createCourseCard(course, status, editable = false) {
   return article;
 }
 
+function createCourseLinkRow(link = {}) {
+  const row = document.createElement('div'); row.className = 'course-link-row';
+  row.dataset.linkId = String(link.id || makeId('link'));
+  const titleLabel = document.createElement('label'); titleLabel.className = 'field-label';
+  titleLabel.append(document.createTextNode('عنوان لینک'));
+  const titleInput = document.createElement('input'); titleInput.type = 'text'; titleInput.className = 'course-link-title';
+  titleInput.maxLength = 80; titleInput.placeholder = 'مثلاً کانال استاد'; titleInput.value = link.title || '';
+  titleLabel.append(titleInput);
+  const urlLabel = document.createElement('label'); urlLabel.className = 'field-label';
+  urlLabel.append(document.createTextNode('نشانی لینک'));
+  const urlInput = document.createElement('input'); urlInput.type = 'url'; urlInput.inputMode = 'url';
+  urlInput.className = 'course-link-url'; urlInput.maxLength = 300; urlInput.placeholder = 'https://...'; urlInput.value = link.url || '';
+  urlLabel.append(urlInput);
+  const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary-button icon-action course-link-remove';
+  remove.setAttribute('aria-label', 'حذف لینک');
+  const icon = document.createElement('img'); icon.src = 'assets/icons/delete.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true');
+  const text = document.createElement('span'); text.textContent = 'حذف لینک';
+  remove.append(icon, text); remove.addEventListener('click', () => row.remove());
+  row.append(titleLabel, urlLabel, remove);
+  return row;
+}
+
+function renderCourseLinkRows(links = []) {
+  const container = $('#course-links-list');
+  container.replaceChildren(...normalizeCourseLinks(links).map(createCourseLinkRow));
+}
+
+function collectCourseLinks() {
+  const links = [];
+  for (const row of $('#course-links-list').querySelectorAll('.course-link-row')) {
+    const title = toFaDigits(row.querySelector('.course-link-title').value.trim());
+    const rawUrl = row.querySelector('.course-link-url').value.trim();
+    if (!title && !rawUrl) continue;
+    if (!title) return { links: null, error: 'برای هر لینک، عنوان آن را وارد کنید.' };
+    if (!rawUrl) return { links: null, error: 'نشانی لینک را وارد کنید.' };
+    const url = normalizeChannelUrl(rawUrl);
+    if (!url) return { links: null, error: 'نشانی لینک معتبر نیست.' };
+    links.push({ id: row.dataset.linkId || makeId('link'), title, url });
+  }
+  return { links, error: '' };
+}
+
 function openCourseDialog(course = null) {
   const form = $('#course-form'); form.reset(); $('#form-error').hidden = true;
   $('#dialog-title').textContent = course ? 'ویرایش درس' : 'افزودن درس';
@@ -394,7 +447,7 @@ function openCourseDialog(course = null) {
   selectedDaysByWeek = course ? course.daysByWeek.map(days => [...days]) : [[], []];
   syncDayPickers();
   $('#course-start').value = course?.start || ''; $('#course-end').value = course?.end || ''; $('#course-class-name').value = course?.className || ''; $('#course-teacher').value = course?.teacher || '';
-  $('#course-teacher-channel').value = course?.teacherChannel || '';
+  renderCourseLinkRows(course ? normalizeCourseLinks(course.links, course.teacherChannel) : []);
   $('#delete-course-button').hidden = !course;
   showAppModal($('#course-dialog')); $('#course-title').focus();
 }
@@ -500,12 +553,15 @@ function openCourseDetails(course) {
   $('#details-days').textContent = formatDaysByWeek(course.daysByWeek);
   $('#details-class-name').textContent = course.className || 'ثبت نشده';
   $('#details-teacher').textContent = course.teacher || 'ثبت نشده';
-  const channel = normalizeChannelUrl(course.teacherChannel);
-  $('#details-teacher-channel').textContent = channel || 'ثبت نشده';
-  const channelButton = $('#course-channel-link-button');
-  channelButton.hidden = !channel;
-  if (channel) channelButton.href = channel;
-  else channelButton.removeAttribute('href');
+  const links = normalizeCourseLinks(course.links, course.teacherChannel);
+  const linkList = $('#details-course-links');
+  if (!links.length) linkList.textContent = 'ثبت نشده';
+  else linkList.replaceChildren(...links.map(link => {
+    const anchor = document.createElement('a');
+    anchor.className = 'details-course-link'; anchor.href = link.url; anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer'; anchor.textContent = link.title;
+    return anchor;
+  }));
   showAppModal(details);
 }
 
@@ -799,7 +855,7 @@ function parseAmozeshyarHtml(html) {
     if (!title) continue;
     const teacher = cells[indexes[1]].trim();
     const meetings = parseAmozeshyarSchedule(cells[indexes[2]]);
-    const courseBase = { title: toFaDigits(title), teacher: toFaDigits(teacher), teacherChannel: '', className: '', notes: [] };
+    const courseBase = { title: toFaDigits(title), teacher: toFaDigits(teacher), links: [], className: '', notes: [] };
     if (!meetings.length) courses.push({ ...courseBase, id: makeId('amozeshyar'), daysByWeek: [[], []], start: '', end: '' });
     else meetings.forEach(meeting => courses.push({ ...courseBase, ...meeting, id: makeId('amozeshyar') }));
   }
@@ -857,7 +913,7 @@ function enrichImportedCourses(importedCourses, previousCourses) {
       ...course,
       className: course.className || previous.className,
       teacher: course.teacher || previous.teacher,
-      teacherChannel: course.teacherChannel || previous.teacherChannel,
+      links: course.links?.length ? course.links : normalizeCourseLinks(previous.links, previous.teacherChannel),
       notes: mergeImportedNotes(course.notes, previous.notes)
     };
   });
@@ -1076,11 +1132,22 @@ function init() {
     if (course) openCourseDialog(course);
   });
   $('#course-notes-button').addEventListener('click', () => openNotesPage(activeDetailsCourseId));
-  $('#course-channel-link-button').addEventListener('click', event => {
-    if (window.AndroidScheduleBridge?.openExternalUrl) {
-      event.preventDefault();
-      window.AndroidScheduleBridge.openExternalUrl(event.currentTarget.href);
-    }
+  $('#add-course-link-button').addEventListener('click', () => {
+    const row = createCourseLinkRow();
+    $('#course-links-list').append(row);
+    row.querySelector('.course-link-title').focus();
+  });
+  $('#course-links-list').addEventListener('input', event => {
+    if (!event.target.matches('.course-link-title')) return;
+    const start = event.target.selectionStart, end = event.target.selectionEnd;
+    const converted = toFaDigits(event.target.value);
+    if (converted !== event.target.value) { event.target.value = converted; event.target.setSelectionRange(start, end); }
+  });
+  $('#details-course-links').addEventListener('click', event => {
+    const anchor = event.target.closest('a.details-course-link');
+    if (!anchor || !window.AndroidScheduleBridge?.openExternalUrl) return;
+    event.preventDefault();
+    window.AndroidScheduleBridge.openExternalUrl(anchor.href);
   });
   $('#back-to-courses').addEventListener('click', () => switchPage('courses'));
   $('#add-note-button').addEventListener('click', () => openNoteDialog());
@@ -1110,17 +1177,17 @@ function init() {
     event.preventDefault(); const values = new FormData(event.currentTarget);
     const title = toFaDigits(String(values.get('title') || '').trim());
     const start = String(values.get('start') || ''), end = String(values.get('end') || ''), error = $('#form-error');
-    const rawChannel = String(values.get('teacherChannel') || '').trim(), teacherChannel = normalizeChannelUrl(rawChannel);
     if (!title) { error.textContent = 'نام درس را وارد کنید.'; error.hidden = false; return; }
     if ((start && !end) || (!start && end)) { error.textContent = 'برای ساعت، شروع و پایان را با هم وارد کنید.'; error.hidden = false; return; }
     if (start && end && start >= end) { error.textContent = 'ساعت پایان باید بعد از ساعت شروع باشد.'; error.hidden = false; return; }
-    if (rawChannel && !teacherChannel) { error.textContent = 'لینک کانال باید یک نشانی معتبر وب باشد.'; error.hidden = false; return; }
+    const { links, error: linkError } = collectCourseLinks();
+    if (!links) { error.textContent = linkError; error.hidden = false; return; }
     const id = String(values.get('id') || makeId()), previous = state.courses.find(item => item.id === id);
     const course = {
       id, title, daysByWeek: selectedDaysByWeek.map(days => [...days]), start, end,
       className: toFaDigits(String(values.get('className') || '').trim()),
       teacher: toFaDigits(String(values.get('teacher') || '').trim()),
-      teacherChannel,
+      links,
       notes: previous?.notes || []
     };
     const index = state.courses.findIndex(item => item.id === id);

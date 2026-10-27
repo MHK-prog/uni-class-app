@@ -195,9 +195,6 @@ html,body{overscroll-behavior-y:none}
 .details-actions{display:grid;grid-template-columns:1fr 1fr}
 .details-actions button{width:100%;min-width:0}
 .details-actions .icon-action{padding-inline:9px!important}
-.channel-link-button{display:flex;align-items:center;justify-content:center;flex:1;text-decoration:none}
-.details-actions .channel-link-button{grid-column:1/-1;width:100%}
-.channel-link-button[hidden]{display:none!important}
 .field-row.full-field{grid-template-columns:minmax(0,1fr)}
 .delete-course-button.icon-action{display:flex;width:100%;height:auto;min-height:48px;margin:12px 0 0;justify-content:center}
 .delete-course-button.icon-action[hidden]{display:none!important}
@@ -220,3 +217,18 @@ html,body{overscroll-behavior-y:none}
 .menu-button span{font-size:15px;font-weight:700}
 .import-page>h1{margin:8px 0 0;font-size:20px}
 button:disabled{opacity:.62;cursor:wait}
+
+/* Multiple titled course links and visible completed classes. */
+.course-links-section{grid-column:1/-1;display:grid;gap:8px;margin:2px 0 4px}
+.course-links-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.course-links-heading strong{font-size:12px;color:var(--muted)}
+.course-link-add{min-height:42px;padding-inline:10px!important}
+.course-links-list{display:grid;gap:8px}
+.course-link-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:9px;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+.course-link-row .field-label{min-width:0;margin:0}
+.course-link-row .course-link-remove{grid-column:1/-1;justify-self:start;min-height:42px}
+.details-course-links{display:grid;gap:8px}
+.details-course-link{color:var(--purple-soft);text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+.course-card.status-done{border-right-color:#38bdf8;background:#101c2b;opacity:1}
+.status-done .status-pill{background:#142a3e;color:#70c4ff}
+@media(max-width:420px){.course-link-row{grid-template-columns:minmax(0,1fr)}.course-link-row .course-link-remove{grid-column:1}}

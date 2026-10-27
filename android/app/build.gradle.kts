@@ -24,7 +24,7 @@ val releaseStorePath = providers.environmentVariable("SIGNING_KEYSTORE_PATH").or
 val releaseStorePassword = providers.environmentVariable("SIGNING_KEYSTORE_PASSWORD").orNull
 val releaseAlias = providers.environmentVariable("SIGNING_KEY_ALIAS").orNull
 val releaseKeyPassword = providers.environmentVariable("SIGNING_KEY_PASSWORD").orNull
-val appVersion = providers.environmentVariable("APP_VERSION").orElse("1.14.3").get()
+val appVersion = providers.environmentVariable("APP_VERSION").orElse("1.15.0").get()
 val buildNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull() ?: 2
 val releaseSigningReady = !releaseStorePath.isNullOrBlank() &&
     !releaseStorePassword.isNullOrBlank() &&

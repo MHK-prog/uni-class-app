@@ -33,7 +33,7 @@
         <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
         <div id="empty-state" class="empty-state" hidden><p id="empty-title">امروز کلاسی ندارید</p></div>
       </section>
-      <footer class="app-footer">نسخهٔ <span id="app-version">۱.۱۴.۰</span></footer>
+      <footer class="app-footer">نسخهٔ <span id="app-version">۱.۱۵.۰</span></footer>
     </section>
 
     <section class="app-page" id="page-courses" data-page-panel="courses" hidden>
@@ -91,7 +91,7 @@
     <button class="menu-action page-link" type="button" data-page="amozeshyar">وارد کردن از آموزشیار</button>
     <button class="menu-action page-link" type="button" data-page="settings">تنظیمات</button>
     <button class="menu-action refresh-button" id="refresh-button" type="button"><img class="menu-item-icon" src="assets/icons/reload.webp" width="24" height="24" alt="" aria-hidden="true"><span>همگام‌سازی برنامه</span></button>
-    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">۱.۱۴.۳</span></footer>
+    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">۱.۱۵.۰</span></footer>
   </dialog>
   <dialog id="date-picker-dialog" class="date-picker-dialog" aria-labelledby="calendar-title">
     <div class="dialog-heading"><h2 id="calendar-title">انتخاب تاریخ</h2><button type="button" class="icon-button close-calendar" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>
@@ -119,8 +119,9 @@
         <label class="field-label">نام استاد<input name="teacher" id="course-teacher" maxlength="80" placeholder="اختیاری"></label>
       </div>
       <p id="form-error" class="form-error" role="alert" hidden></p>
-      <div class="field-row full-field">
-        <label class="field-label">لینک کانال استاد<input name="teacherChannel" id="course-teacher-channel" type="url" inputmode="url" maxlength="300" placeholder="https://..."></label>
+      <div class="course-links-section">
+        <div class="course-links-heading"><strong>لینک‌های کلاس</strong><button class="secondary-button icon-action course-link-add" id="add-course-link-button" type="button"><img src="assets/icons/add.webp" width="24" height="24" alt="" aria-hidden="true"><span>افزودن لینک</span></button></div>
+        <div id="course-links-list" class="course-links-list"></div>
       </div>
       <div class="dialog-actions"><button type="button" class="secondary-button icon-action cancel-dialog"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"><span>لغو</span></button><button type="submit" class="primary-button icon-action"><img src="assets/icons/check.svg" width="24" height="24" alt="" aria-hidden="true"><span>ذخیره</span></button></div>
       <button type="button" class="delete-course-button icon-action" id="delete-course-button" hidden><img src="assets/icons/delete.webp" width="24" height="24" alt="" aria-hidden="true"><span>حذف درس</span></button>
@@ -133,12 +134,11 @@
       <div><dt>روزهای برگزاری</dt><dd id="details-days"></dd></div>
       <div><dt>نام کلاس</dt><dd id="details-class-name"></dd></div>
       <div><dt>استاد</dt><dd id="details-teacher"></dd></div>
-      <div><dt>کانال استاد</dt><dd id="details-teacher-channel"></dd></div>
+      <div><dt>لینک‌ها</dt><dd id="details-course-links" class="details-course-links"></dd></div>
     </dl>
     <div class="details-actions">
       <button type="button" class="secondary-button" id="course-notes-button">یادداشت‌ها</button>
       <button type="button" class="primary-button icon-action" id="edit-course-from-details"><img src="assets/icons/edit.webp" width="24" height="24" alt="" aria-hidden="true"><span>ویرایش درس</span></button>
-      <a class="secondary-button channel-link-button" id="course-channel-link-button" target="_blank" rel="noopener noreferrer" hidden>رفتن به کانال استاد</a>
     </div>
   </dialog>
   <dialog id="note-dialog" class="course-dialog note-dialog">

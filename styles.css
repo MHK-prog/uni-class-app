@@ -15,7 +15,6 @@ body{font-size:16px}
 .top-actions{gap:10px}
 .menu-button{position:relative;display:grid;place-items:center;width:48px;height:48px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--purple-soft);font-size:22px;cursor:pointer;touch-action:manipulation}
 .menu-button:active{background:var(--panel-2)}
-.incomplete-indicator{position:absolute;inset-block-start:7px;inset-inline-start:7px;width:11px;height:11px;border:2px solid var(--panel);border-radius:50%;background:#ff4d61}
 .add-button{width:48px;height:48px;font-size:25px}
 .day-context>div strong{font-size:16px}
 .day-context>div span{font-size:15px}

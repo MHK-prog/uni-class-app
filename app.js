@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.15.0';
+const APP_VERSION = '1.15.1';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -343,7 +343,6 @@ function render(now = new Date()) {
   const dateButton = $('#pick-date-button');
   dateButton.classList.toggle('active', !isToday); dateButton.setAttribute('aria-pressed', String(!isToday));
   $('#picked-date-short').textContent = info.shortFormatted;
-  $('#app-version').textContent = toFaDigits(APP_VERSION);
   $('#drawer-app-version').textContent = toFaDigits(APP_VERSION);
   const matching = state.courses.filter(course => course.daysByWeek?.[info.weekIndex]?.includes(info.weekday) && course.start && course.end).sort((a, b) => a.start.localeCompare(b.start));
   const rendered = matching.map(course => ({ course, status: statusFor(course, info.currentMinutes, info.isToday) }));
@@ -356,10 +355,6 @@ function render(now = new Date()) {
   const byDay = [...state.courses].sort((a, b) => a.start.localeCompare(b.start) || a.title.localeCompare(b.title, 'fa'));
   $('#manage-course-list').replaceChildren(...byDay.map(course => createCourseCard(course, !course.daysByWeek.some(days => days.length) || !course.start || !course.end ? 'incomplete' : 'upcoming', true)));
   $('#manage-empty').hidden = byDay.length !== 0;
-  const hasIncomplete = state.courses.some(course => !course.daysByWeek.some(days => days.length) || !course.start || !course.end);
-  const indicator = $('.incomplete-indicator');
-  indicator.hidden = !hasIncomplete;
-  $('#menu-button').setAttribute('aria-label', hasIncomplete ? 'باز کردن منو؛ درس ناقص دارید' : 'باز کردن منو');
   syncWeekRowLabels();
 }
 

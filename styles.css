@@ -241,3 +241,16 @@ button:disabled{opacity:.62;cursor:wait}
 .schedule-time-row .field-label input{height:42px;padding-inline:4px;text-align:center;direction:ltr}
 .editable-card .course-time{max-width:100%;align-self:start;padding-top:2px;white-space:pre-line;line-height:1.65;overflow-wrap:anywhere}
 .details-schedule{white-space:pre-line;line-height:1.9}
+
+/* Per-course schedule choices in Amozeshyar import preview. */
+.import-preview ul{list-style:none;padding:0}
+.import-course-item{display:grid;gap:7px;padding:11px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.import-course-item>strong{font-size:14px;overflow-wrap:anywhere}
+.import-course-schedule{color:var(--muted);font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+.import-schedule-choice{display:grid;gap:7px;margin:4px 0 0;padding:9px;border:1px solid var(--line);border-radius:10px}
+.import-schedule-choice legend{padding:0 5px;color:var(--purple-soft);font-size:12px}
+.import-schedule-line{display:grid;gap:2px;font-size:12px;line-height:1.7}
+.import-schedule-line span{color:var(--muted);overflow-wrap:anywhere}
+.import-schedule-options{display:flex;flex-wrap:wrap;gap:8px;margin-top:3px}
+.import-schedule-options label{display:flex;align-items:center;gap:6px;min-height:40px;padding:0 9px;border:1px solid var(--line);border-radius:9px;color:var(--text);font-size:13px;cursor:pointer}
+.import-schedule-options input{width:18px;height:18px;accent-color:var(--purple)}

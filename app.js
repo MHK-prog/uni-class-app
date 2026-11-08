@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.15.3';
+const APP_VERSION = '1.15.4';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -29,6 +29,7 @@ let calendarTarget = 'dashboard';
 let calendarDraftISO = '';
 let calendarCursorISO = '';
 let pendingAmozeshyarCourses = null;
+let pendingAmozeshyarScheduleChoices = new Map();
 let nativeBackupResolve = null;
 
 function loadState() {
@@ -898,42 +899,112 @@ function parseAmozeshyarSchedule(value) {
 
 function parseAmozeshyarHtml(html) {
   const parsedDocument = new DOMParser().parseFromString(html, 'text/html');
-  const table = parsedDocument.getElementById('panel__3');
-  if (!table) throw new Error('جدول دروس آموزشیار (panel__3) در فایل پیدا نشد.');
-  const rows = [...table.querySelectorAll('tr')];
-  if (rows.length < 2) throw new Error('جدول آموزشیار ردیف درسی ندارد.');
+  const getRows = table => [...table.querySelectorAll('tr')].filter(row => row.closest('table') === table);
   const getCells = row => [...row.children].filter(cell => /^(TH|TD)$/i.test(cell.tagName)).map(cell => {
     const copy = cell.cloneNode(true);
     copy.querySelectorAll('br').forEach(lineBreak => lineBreak.replaceWith(document.createTextNode(' ')));
     copy.querySelectorAll('div,p,li').forEach(block => block.append(document.createTextNode(' ')));
     return copy.textContent.replace(/\s+/g, ' ').trim();
   });
-  const headers = getCells(rows[0]).map(header => normalizeAmozeshyarText(header).replace(/[\s:()（）\-–—_]/g, ''));
-  const findHeader = predicate => headers.findIndex(predicate);
-  const nameIndex = findHeader(header => header.includes('نامدرس'));
-  const teacherIndex = findHeader(header => header.includes('ناماستاد'));
-  const scheduleIndex = findHeader(header => header.includes('زمانبندی') && (header.includes('برگزاری') || header.includes('کلاس')));
-  const indexes = [nameIndex >= 0 ? nameIndex : 4, teacherIndex >= 0 ? teacherIndex : 11, scheduleIndex >= 0 ? scheduleIndex : 14];
-  const courses = [];
-  for (const row of rows.slice(1)) {
-    const cells = getCells(row);
-    if (cells.length <= Math.max(...indexes)) continue;
-    const title = cells[indexes[0]].trim();
-    if (!title) continue;
-    const teacher = cells[indexes[1]].trim();
-    const meetings = parseAmozeshyarSchedule(cells[indexes[2]]);
-    const courseBase = { title: toFaDigits(title), teacher: toFaDigits(teacher), links: [], className: '', notes: [] };
-    const scheduleMaps = [new Map(), new Map()];
-    meetings.forEach(meeting => meeting.daysByWeek.forEach((days, weekIndex) => {
-      days.forEach(day => scheduleMaps[weekIndex].set(day, { day, start: meeting.start, end: meeting.end }));
-    }));
-    const scheduleByWeek = scheduleMaps.map(byDay => WEEK_DAY_ORDER.filter(day => byDay.has(day)).map(day => byDay.get(day)));
-    courses.push({ ...courseBase, id: makeId('amozeshyar'), scheduleByWeek });
+  const normalizeHeader = value => normalizeAmozeshyarText(value).replace(/[\s:()\uFF08\uFF09\-\u2013\u2014_]/g, '');
+  const findColumns = headers => {
+    const nameIndex = headers.findIndex(header => header.includes('\u0646\u0627\u0645\u062f\u0631\u0633'));
+    const teacherIndex = headers.findIndex(header => header.includes('\u0646\u0627\u0645\u0627\u0633\u062a\u0627\u062f') || header.includes('\u0627\u0633\u0627\u062a\u06cc\u062f'));
+    const scheduleIndex = headers.findIndex(header => header.includes('\u0632\u0645\u0627\u0646') && (header.includes('\u0628\u0631\u06af\u0632\u0627\u0631\u06cc') || header.includes('\u06a9\u0644\u0627\u0633')));
+    const dayIndex = headers.findIndex(header => header.includes('\u0631\u0648\u0632') && header.includes('\u0647\u0641\u062a\u0647'));
+    const classNameIndex = headers.findIndex(header => header.includes('\u0646\u0627\u0645\u06a9\u0644\u0627\u0633\u062f\u0631\u0633'));
+    const locationIndex = headers.findIndex(header => header.includes('\u0645\u06a9\u0627\u0646') && header.includes('\u0628\u0631\u06af\u0632\u0627\u0631\u06cc'));
+    return { nameIndex, teacherIndex, scheduleIndex, dayIndex, classNameIndex, locationIndex };
+  };
+  const candidates = [];
+  for (const table of parsedDocument.querySelectorAll('table')) {
+    const rows = getRows(table);
+    for (let headerIndex = 0; headerIndex < rows.length; headerIndex += 1) {
+      const headers = getCells(rows[headerIndex]).map(normalizeHeader);
+      const indexes = findColumns(headers);
+      if (indexes.nameIndex < 0 || indexes.teacherIndex < 0 || indexes.scheduleIndex < 0) continue;
+      candidates.push({ table, rows, headerIndex, indexes });
+      break;
+    }
   }
-  if (!courses.length) throw new Error('هیچ درس معتبری در جدول آموزشیار پیدا نشد.');
+  if (!candidates.length) {
+    const legacyTable = parsedDocument.getElementById('panel__3');
+    const rows = legacyTable ? getRows(legacyTable) : [];
+    if (rows.length >= 2) candidates.push({
+      table: legacyTable, rows, headerIndex: 0,
+      indexes: { nameIndex: 4, teacherIndex: 11, scheduleIndex: 14, dayIndex: -1, classNameIndex: -1, locationIndex: -1 }
+    });
+  }
+  if (!candidates.length) throw new Error('\u062c\u062f\u0648\u0644 \u062f\u0631\u0648\u0633 \u0622\u0645\u0648\u0632\u0634\u06cc\u0627\u0631 \u062f\u0631 \u0641\u0627\u06cc\u0644 \u067e\u06cc\u062f\u0627 \u0646\u0634\u062f.');
+  const selected = candidates.find(item => item.table.id === 'panel__3') || candidates[0];
+  const { rows, headerIndex, indexes } = selected;
+  const coursesByKey = new Map();
+  for (const row of rows.slice(headerIndex + 1)) {
+    const cells = getCells(row);
+    if (cells.length <= Math.max(indexes.nameIndex, indexes.teacherIndex, indexes.scheduleIndex)) continue;
+    const title = cells[indexes.nameIndex].trim();
+    if (!title) continue;
+    const teacher = cells[indexes.teacherIndex].trim();
+    const timeText = cells[indexes.scheduleIndex] || '';
+    const dayText = indexes.dayIndex >= 0 ? cells[indexes.dayIndex] || '' : '';
+    const scheduleText = dayText ? `${dayText} ${timeText}` : timeText;
+    const meetings = parseAmozeshyarSchedule(scheduleText);
+    const importedClassName = indexes.classNameIndex >= 0 && cells[indexes.classNameIndex] && cells[indexes.classNameIndex] !== '-'
+      ? cells[indexes.classNameIndex]
+      : indexes.locationIndex >= 0 && cells[indexes.locationIndex] && cells[indexes.locationIndex] !== '-' ? cells[indexes.locationIndex] : '';
+    const courseBase = {
+      title: toFaDigits(title), teacher: toFaDigits(teacher), links: [],
+      className: toFaDigits(importedClassName), notes: []
+    };
+    const key = `${courseMatchKey(courseBase.title)}|${courseMatchKey(courseBase.teacher)}`;
+    if (!coursesByKey.has(key)) {
+      coursesByKey.set(key, { ...courseBase, id: makeId('amozeshyar'), scheduleMaps: [new Map(), new Map()] });
+    }
+    const course = coursesByKey.get(key);
+    if (!course.className && courseBase.className) course.className = courseBase.className;
+    meetings.forEach(meeting => meeting.daysByWeek.forEach((days, weekIndex) => {
+      days.forEach(day => {
+        const previous = course.scheduleMaps[weekIndex].get(day);
+        const start = previous && previous.start < meeting.start ? previous.start : meeting.start;
+        const end = previous && previous.end > meeting.end ? previous.end : meeting.end;
+        course.scheduleMaps[weekIndex].set(day, { day, start, end });
+      });
+    }));
+  }
+  const courses = [...coursesByKey.values()].map(course => {
+    const scheduleByWeek = course.scheduleMaps.map(byDay => WEEK_DAY_ORDER.filter(day => byDay.has(day)).map(day => byDay.get(day)));
+    const { scheduleMaps, ...result } = course;
+    return { ...result, scheduleByWeek };
+  });
+  if (!courses.length) throw new Error('\u0647\u06cc\u0686 \u062f\u0631\u0633 \u0645\u0639\u062a\u0628\u0631\u06cc \u062f\u0631 \u062c\u062f\u0648\u0644 \u0622\u0645\u0648\u0632\u0634\u06cc\u0627\u0631 \u067e\u06cc\u062f\u0627 \u0646\u0634\u062f.');
   return courses;
 }
 
+function courseScheduleSignature(course) {
+  return [0, 1].map(weekIndex => WEEK_DAY_ORDER.map(day => {
+    const entry = course.scheduleByWeek?.[weekIndex]?.find(item => item.day === day);
+    return entry ? `${day}:${entry.start}-${entry.end}` : '';
+  }).filter(Boolean).join('|')).join('||');
+}
+
+function courseHasSchedule(course) {
+  return course.scheduleByWeek?.some(week => week.length) || false;
+}
+
+function importedScheduleConflicts(importedCourses, previousCourses) {
+  return importedCourses.flatMap(course => {
+    const previous = findPreviousCourseForImport(course, previousCourses);
+    if (!previous || !courseHasSchedule(course) || !courseHasSchedule(previous)) return [];
+    return courseScheduleSignature(course) === courseScheduleSignature(previous) ? [] : [{ course, previous }];
+  });
+}
+
+function updateAmozeshyarApplyButton() {
+  const button = $('#apply-amozeshyar-import');
+  if (!button) return;
+  const conflicts = importedScheduleConflicts(pendingAmozeshyarCourses || [], state.courses);
+  button.disabled = conflicts.some(({ course }) => !pendingAmozeshyarScheduleChoices.has(course.id));
+}
 function courseMatchKey(value) {
   return normalizeAmozeshyarText(value).toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g, '');
 }
@@ -979,13 +1050,14 @@ function mergeImportedNotes(importedNotes, previousNotes) {
   });
 }
 
-function enrichImportedCourses(importedCourses, previousCourses) {
+function enrichImportedCourses(importedCourses, previousCourses, scheduleChoices = new Map()) {
   return importedCourses.map(course => {
     const previous = findPreviousCourseForImport(course, previousCourses);
     if (!previous) return course;
+    const usePreviousSchedule = scheduleChoices.get(course.id) === 'previous' || !courseHasSchedule(course);
     return {
       ...course,
-      scheduleByWeek: course.scheduleByWeek.some(week => week.length) ? course.scheduleByWeek : previous.scheduleByWeek,
+      scheduleByWeek: usePreviousSchedule ? previous.scheduleByWeek : course.scheduleByWeek,
       className: course.className || previous.className,
       teacher: course.teacher || previous.teacher,
       links: course.links?.length ? course.links : normalizeCourseLinks(previous.links, previous.teacherChannel),
@@ -994,56 +1066,110 @@ function enrichImportedCourses(importedCourses, previousCourses) {
   });
 }
 
+function appendImportScheduleLine(parent, label, course) {
+  const line = document.createElement('div');
+  line.className = 'import-schedule-line';
+  const heading = document.createElement('strong');
+  heading.textContent = label;
+  const schedule = document.createElement('span');
+  schedule.textContent = formatCourseSchedule(course, false).replace(/\n/g, ' | ');
+  line.append(heading, schedule);
+  parent.append(line);
+}
+
+function appendImportScheduleChoice(parent, course, previous) {
+  const group = document.createElement('fieldset');
+  group.className = 'import-schedule-choice';
+  const legend = document.createElement('legend');
+  legend.textContent = '\u0627\u0646\u062a\u062e\u0627\u0628 \u0633\u0627\u0639\u062a \u0627\u06cc\u0646 \u062f\u0631\u0633';
+  group.append(legend);
+  appendImportScheduleLine(group, '\u0628\u0631\u0646\u0627\u0645\u0647 \u0642\u0628\u0644\u06cc', previous);
+  appendImportScheduleLine(group, '\u0628\u0631\u0646\u0627\u0645\u0647 \u062c\u062f\u06cc\u062f', course);
+  const options = document.createElement('div');
+  options.className = 'import-schedule-options';
+  [
+    { value: 'previous', text: '\u0642\u0628\u0644\u06cc \u0631\u0627 \u0646\u06af\u0647 \u062f\u0627\u0631' },
+    { value: 'new', text: '\u062c\u062f\u06cc\u062f \u0631\u0627 \u0646\u06af\u0647 \u062f\u0627\u0631' }
+  ].forEach(option => {
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'radio'; input.name = `amozeshyar-schedule-${course.id}`; input.value = option.value;
+    input.checked = pendingAmozeshyarScheduleChoices.get(course.id) === option.value;
+    input.addEventListener('change', () => {
+      pendingAmozeshyarScheduleChoices.set(course.id, option.value);
+      updateAmozeshyarApplyButton();
+    });
+    const text = document.createElement('span'); text.textContent = option.text;
+    label.append(input, text); options.append(label);
+  });
+  group.append(options);
+  parent.append(group);
+}
+
 async function previewAmozeshyarFile(file) {
   const error = $('#amozeshyar-error'), preview = $('#amozeshyar-preview');
-  error.hidden = true; preview.hidden = true; pendingAmozeshyarCourses = null;
+  error.hidden = true; preview.hidden = true; pendingAmozeshyarCourses = null; pendingAmozeshyarScheduleChoices = new Map();
   try {
     if (!file) return;
     const html = await readMhtHtml(file);
     const courses = normalizeCourses(parseAmozeshyarHtml(html));
     const previewCourses = enrichImportedCourses(courses, state.courses);
+    const conflicts = importedScheduleConflicts(courses, state.courses);
     const incomplete = previewCourses.filter(courseScheduleIsIncomplete).length;
     const enrichedCount = courses.filter(course => findPreviousCourseForImport(course, state.courses)).length;
-    $('#amozeshyar-summary').textContent = numberFa.format(courses.length) + ' درس پیدا شد؛ ' + numberFa.format(incomplete) + ' درس نیاز به بررسی دارد.' + (enrichedCount ? ' اطلاعات تکمیلی ' + numberFa.format(enrichedCount) + ' درس از برنامهٔ قبلی حفظ می‌شود.' : '');
-    $('#amozeshyar-apply-label').textContent = state.courses.length ? 'پشتیبان‌گیری و جایگزینی' : 'وارد کردن برنامه';
-    const list = $('#amozeshyar-preview-list'), items = previewCourses.slice(0, 12).map(course => {
+    const conflictCount = conflicts.length;
+    $('#amozeshyar-summary').textContent = numberFa.format(courses.length) + ' \u062f\u0631\u0633 \u067e\u06cc\u062f\u0627 \u0634\u062f\u061b ' + numberFa.format(incomplete) + ' \u062f\u0631\u0633 \u0646\u06cc\u0627\u0632 \u0628\u0647 \u0628\u0631\u0631\u0633\u06cc \u062f\u0627\u0631\u062f.' + (enrichedCount ? ' \u0627\u0637\u0644\u0627\u0639\u0627\u062a \u062a\u06a9\u0645\u06cc\u0644\u06cc ' + numberFa.format(enrichedCount) + ' \u062f\u0631\u0633 \u0627\u0632 \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0642\u0628\u0644\u06cc \u062d\u0641\u0638 \u0645\u06cc\u200c\u0634\u0648\u062f.' : '') + (conflictCount ? ' \u0633\u0627\u0639\u062a ' + numberFa.format(conflictCount) + ' \u062f\u0631\u0633 \u062a\u063a\u06cc\u06cc\u0631 \u06a9\u0631\u062f\u0647\u061b \u0628\u0631\u0627\u06cc \u0647\u0631\u06a9\u062f\u0627\u0645 \u06cc\u06a9\u06cc \u0627\u0632 \u062f\u0648 \u0628\u0631\u0646\u0627\u0645\u0647 \u0631\u0627 \u0627\u0646\u062a\u062e\u0627\u0628 \u06a9\u0646\u06cc\u062f.' : '');
+    $('#amozeshyar-apply-label').textContent = state.courses.length ? '\u067e\u0634\u062a\u06cc\u0628\u0627\u0646\u200c\u06af\u06cc\u0631\u06cc \u0648 \u062c\u0627\u06cc\u06af\u0632\u06cc\u0646\u06cc' : '\u0648\u0627\u0631\u062f \u06a9\u0631\u062f\u0646 \u0628\u0631\u0646\u0627\u0645\u0647';
+    const list = $('#amozeshyar-preview-list'), items = previewCourses.map(course => {
       const item = document.createElement('li');
-      const schedule = formatCourseSchedule(course, true).replace(/\n/g, ' | ');
-      item.textContent = course.title + ' — ' + (course.teacher || 'استاد نامشخص') + ' — ' + schedule;
+      item.className = 'import-course-item';
+      const heading = document.createElement('strong');
+      heading.textContent = course.title + ' \u2014 ' + (course.teacher || '\u0627\u0633\u062a\u0627\u062f \u0646\u0627\u0645\u0634\u062e\u0635');
+      const conflict = conflicts.find(value => value.course.id === course.id);
+      item.append(heading);
+      if (conflict) appendImportScheduleChoice(item, course, conflict.previous);
+      else {
+        const schedule = document.createElement('span');
+        schedule.className = 'import-course-schedule';
+        schedule.textContent = formatCourseSchedule(course, true).replace(/\n/g, ' | ');
+        item.append(schedule);
+      }
       return item;
     });
-    if (courses.length > items.length) {
-      const rest = document.createElement('li');
-      rest.textContent = 'و ' + numberFa.format(courses.length - items.length) + ' درس دیگر';
-      items.push(rest);
-    }
     list.replaceChildren(...items);
-    pendingAmozeshyarCourses = courses; preview.hidden = false;
+    pendingAmozeshyarCourses = courses; preview.hidden = false; updateAmozeshyarApplyButton();
   } catch (errorValue) {
-    error.textContent = errorValue.message || 'خواندن فایل آموزشیار ناموفق بود.';
+    error.textContent = errorValue.message || '\u062e\u0648\u0627\u0646\u062f\u0646 \u0641\u0627\u06cc\u0644 \u0622\u0645\u0648\u0632\u0634\u06cc\u0627\u0631 \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062f.';
     error.hidden = false;
   } finally { $('#amozeshyar-file').value = ''; }
 }
 
 async function applyAmozeshyarImport() {
   if (!pendingAmozeshyarCourses?.length) return;
+  const conflicts = importedScheduleConflicts(pendingAmozeshyarCourses, state.courses);
+  const unanswered = conflicts.find(({ course }) => !pendingAmozeshyarScheduleChoices.has(course.id));
+  if (unanswered) {
+    showToast('\u0628\u0631\u0627\u06cc \u062f\u0631\u0633\u200c\u0647\u0627\u06cc\u06cc \u06a9\u0647 \u0633\u0627\u0639\u062a\u0634\u0627\u0646 \u062a\u063a\u06cc\u06cc\u0631 \u06a9\u0631\u062f\u0647\u060c \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0642\u0628\u0644\u06cc \u06cc\u0627 \u062c\u062f\u06cc\u062f \u0631\u0627 \u0627\u0646\u062a\u062e\u0627\u0628 \u06a9\u0646\u06cc\u062f.');
+    $(`input[name="amozeshyar-schedule-${unanswered.course.id}"]`)?.focus();
+    return;
+  }
   const replacingExisting = state.courses.length > 0;
-  if (replacingExisting && !window.confirm('برنامهٔ فعلی جایگزین شود؟ ابتدا از آن نسخهٔ پشتیبان ذخیره می‌شود.')) return;
+  if (replacingExisting && !window.confirm('\u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0641\u0639\u0644\u06cc \u062c\u0627\u06cc\u06af\u0632\u06cc\u0646 \u0634\u0648\u062f\u061f \u0627\u0628\u062a\u062f\u0627 \u0627\u0632 \u0622\u0646 \u0646\u0633\u062e\u0647\u0654 \u067e\u0634\u062a\u06cc\u0628\u0627\u0646 \u0630\u062e\u06cc\u0631\u0647 \u0645\u06cc\u200c\u0634\u0648\u062f.')) return;
   const button = $('#apply-amozeshyar-import');
   button.disabled = true;
   try {
     const backupSaved = await saveBackupBeforeImport();
     if (!backupSaved) {
-      showToast('پشتیبان ذخیره نشد؛ برنامهٔ فعلی حفظ شد و واردسازی انجام نشد.');
+      showToast('\u067e\u0634\u062a\u06cc\u0628\u0627\u0646 \u0630\u062e\u06cc\u0631\u0647 \u0646\u0634\u062f\u061b \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0641\u0639\u0644\u06cc \u062d\u0641\u0638 \u0634\u062f \u0648 \u0648\u0627\u0631\u062f\u0633\u0627\u0632\u06cc \u0627\u0646\u062c\u0627\u0645 \u0646\u0634\u062f.');
       return;
     }
-    state = { cycle: state.cycle, courses: enrichImportedCourses(pendingAmozeshyarCourses, state.courses) };
-    saveState(); render(); syncTermSettings(); pendingAmozeshyarCourses = null;
+    state = { cycle: state.cycle, courses: enrichImportedCourses(pendingAmozeshyarCourses, state.courses, pendingAmozeshyarScheduleChoices) };
+    saveState(); render(); syncTermSettings(); pendingAmozeshyarCourses = null; pendingAmozeshyarScheduleChoices = new Map();
     $('#amozeshyar-preview').hidden = true;
     switchPage('courses');
-    showToast(numberFa.format(state.courses.length) + (replacingExisting ? ' درس وارد شد؛ برنامهٔ قبلی پشتیبان‌گیری شد.' : ' درس وارد شد.'));
+    showToast(numberFa.format(state.courses.length) + (replacingExisting ? ' \u062f\u0631\u0633 \u0648\u0627\u0631\u062f \u0634\u062f\u061b \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0642\u0628\u0644\u06cc \u067e\u0634\u062a\u06cc\u0628\u0627\u0646\u200c\u06af\u06cc\u0631\u06cc \u0634\u062f.' : ' \u062f\u0631\u0633 \u0648\u0627\u0631\u062f \u0634\u062f.'));
   } catch (error) {
-    showToast('واردسازی انجام نشد: ' + (error.message || 'ذخیرهٔ پشتیبان ممکن نبود.'));
+    showToast('\u0648\u0627\u0631\u062f\u0633\u0627\u0632\u06cc \u0627\u0646\u062c\u0627\u0645 \u0646\u0634\u062f: ' + (error.message || '\u0630\u062e\u06cc\u0631\u0647\u0654 \u067e\u0634\u062a\u06cc\u0628\u0627\u0646 \u0645\u0645\u06a9\u0646 \u0646\u0628\u0648\u062f.'));
   } finally { button.disabled = false; }
 }
 

@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.15.2';
+const APP_VERSION = '1.15.3';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -18,7 +18,7 @@ const $ = selector => document.querySelector(selector);
 let state = loadState();
 let selectedDateISO = targetDay(0).iso;
 let selectedDateMode = 'today';
-let selectedDaysByWeek = [[], []];
+let selectedScheduleByWeek = [[], []];
 let toastTimer;
 let activeDetailsCourseId = '';
 let activeNotesCourseId = '';
@@ -124,15 +124,41 @@ function normalizeDaysByWeek(raw, oldSettings, flipWeeks = false) {
   return finish(week === firstParity ? [[day], []] : [[], [day]]);
 }
 
+function normalizeScheduleByWeek(raw, oldSettings, flipWeeks = false) {
+  const stored = raw.scheduleByWeek;
+  if (Array.isArray(stored) || (stored && typeof stored === 'object')) {
+    const source = Array.isArray(stored) ? stored : [stored.first || stored.week1 || [], stored.second || stored.week2 || []];
+    let rows = [0, 1].map(index => {
+      const byDay = new Map();
+      for (const item of Array.isArray(source[index]) ? source[index] : []) {
+        const day = item?.day || item?.weekday;
+        if (!WEEK_DAY_ORDER.includes(day)) continue;
+        byDay.set(day, {
+          day,
+          start: validTime(item.start || item.startTime) ? (item.start || item.startTime) : '',
+          end: validTime(item.end || item.endTime) ? (item.end || item.endTime) : ''
+        });
+      }
+      return WEEK_DAY_ORDER.filter(day => byDay.has(day)).map(day => byDay.get(day));
+    });
+    if (flipWeeks) rows = [rows[1], rows[0]];
+    return rows;
+  }
+
+  // Migrate the old shared time range to each selected day.
+  const daysByWeek = normalizeDaysByWeek(raw, oldSettings, flipWeeks);
+  const start = validTime(raw.start) ? raw.start : '';
+  const end = validTime(raw.end) ? raw.end : '';
+  return daysByWeek.map(days => days.map(day => ({ day, start, end })));
+}
+
 function normalizeCourses(items, oldSettings = normalizeLegacySettings(), flipWeeks = false) {
   return items.map((raw, index) => {
     const title = toFaDigits(String(raw.title || raw.name || '').trim()).slice(0, 80);
     if (!title) return null;
     return {
       id: String(raw.id || makeId(index)), title,
-      daysByWeek: normalizeDaysByWeek(raw, oldSettings, flipWeeks),
-      start: validTime(raw.start) ? raw.start : '',
-      end: validTime(raw.end) ? raw.end : '',
+      scheduleByWeek: normalizeScheduleByWeek(raw, oldSettings, flipWeeks),
       className: toFaDigits(String(raw.className ?? raw.classroom ?? raw.room ?? '').trim()).slice(0, 50),
       teacher: toFaDigits(String(raw.teacher || '').trim()).slice(0, 80),
       links: normalizeCourseLinks(raw.links, raw.teacherChannel),
@@ -262,11 +288,34 @@ function parityForCycleIndex(index) { return index === 0 ? 'odd' : 'even'; }
 
 function parityLabel(index) { return `هفتهٔ ${parityForCycleIndex(index) === 'even' ? 'زوج' : 'فرد'}`; }
 
-function formatDaysByWeek(daysByWeek = [[], []]) {
-  return daysByWeek.map((days, index) => {
-    const initials = WEEK_DAY_ORDER.filter(day => days.includes(day)).map(day => WEEK_DAY_SHORT[day]).join('، ') || '—';
-    return `${parityForCycleIndex(index) === 'even' ? 'زوج' : 'فرد'}: ${initials}`;
-  }).join('  |  ');
+function courseScheduleEntries(course) {
+  return [0, 1].flatMap(index => Array.isArray(course.scheduleByWeek?.[index]) ? course.scheduleByWeek[index] : []);
+}
+
+function scheduleEntryIsComplete(entry) {
+  return validTime(entry?.start) && validTime(entry?.end) && entry.start < entry.end;
+}
+
+function courseScheduleIsIncomplete(course) {
+  const entries = courseScheduleEntries(course);
+  return !entries.length || entries.some(entry => !scheduleEntryIsComplete(entry));
+}
+
+function firstCourseStart(course) {
+  return courseScheduleEntries(course).map(entry => entry.start).filter(validTime).sort()[0] || '99:99';
+}
+
+function formatCourseSchedule(course, compact = false) {
+  return [0, 1].map(index => {
+    const entries = [...(course.scheduleByWeek?.[index] || [])].sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day));
+    const label = parityForCycleIndex(index) === 'even' ? 'زوج' : 'فرد';
+    const items = entries.map(entry => {
+      const day = compact ? WEEK_DAY_SHORT[entry.day] : entry.day;
+      const time = scheduleEntryIsComplete(entry) ? `${displayTime(entry.start)}–${displayTime(entry.end)}` : 'ساعت ثبت نشده';
+      return `${day} ${time}`;
+    });
+    return `${label}: ${items.join('، ') || '—'}`;
+  }).join('\n');
 }
 
 function currentSaturdayISO(now = new Date()) {
@@ -292,9 +341,29 @@ function syncWeekRowLabels() {
 
 function syncDayPickers() {
   document.querySelectorAll('.day-circle').forEach(button => {
-    const weekIndex = Number(button.dataset.weekIndex), active = selectedDaysByWeek[weekIndex].includes(button.dataset.day);
+    const weekIndex = Number(button.dataset.weekIndex), active = selectedScheduleByWeek[weekIndex].some(entry => entry.day === button.dataset.day);
     button.classList.toggle('selected', active);
     button.setAttribute('aria-pressed', String(active));
+  });
+}
+
+function renderScheduleTimeRows() {
+  [0, 1].forEach(weekIndex => {
+    const container = $(`#week-${weekIndex === 0 ? 'one' : 'two'}-times`);
+    const rows = selectedScheduleByWeek[weekIndex].map(entry => {
+      const row = document.createElement('div'); row.className = 'schedule-time-row';
+      const day = document.createElement('strong'); day.className = 'schedule-time-day'; day.textContent = entry.day;
+      row.append(day);
+      for (const [field, labelText] of [['start', 'شروع'], ['end', 'پایان']]) {
+        const label = document.createElement('label'); label.className = 'field-label'; label.textContent = labelText;
+        const input = document.createElement('input'); input.type = 'time'; input.className = 'schedule-time-input';
+        input.dataset.weekIndex = String(weekIndex); input.dataset.day = entry.day; input.dataset.field = field;
+        input.setAttribute('aria-label', `${parityLabel(weekIndex)}، ${entry.day}، ${labelText}`);
+        input.value = entry[field] || ''; label.append(input); row.append(label);
+      }
+      return row;
+    });
+    container.replaceChildren(...rows);
   });
 }
 
@@ -306,20 +375,22 @@ function initDayPickers() {
       button.type = 'button'; button.className = 'day-circle'; button.dataset.day = day; button.dataset.weekIndex = String(weekIndex);
       button.textContent = WEEK_DAY_SHORT[day]; button.title = day; button.setAttribute('aria-label', `${parityLabel(weekIndex)}، ${day}`); button.setAttribute('aria-pressed', 'false');
       button.addEventListener('click', () => {
-        const selected = selectedDaysByWeek[weekIndex];
-        selectedDaysByWeek[weekIndex] = selected.includes(day) ? selected.filter(item => item !== day) : [...selected, day];
+        const selectedIndex = selectedScheduleByWeek[weekIndex].findIndex(item => item.day === day);
+        if (selectedIndex >= 0) selectedScheduleByWeek[weekIndex].splice(selectedIndex, 1);
+        else selectedScheduleByWeek[weekIndex].push({ day, start: '', end: '' });
         syncDayPickers();
+        renderScheduleTimeRows();
       });
       row.append(button);
     });
   });
 }
 
-function statusFor(course, currentMinutes, isToday) {
-  if (!course.daysByWeek?.some(days => days.length) || !course.start || !course.end) return 'incomplete';
+function statusFor(schedule, currentMinutes, isToday) {
+  if (!scheduleEntryIsComplete(schedule)) return 'incomplete';
   if (!isToday) return 'upcoming';
-  const [startHour, startMinute] = course.start.split(':').map(Number);
-  const [endHour, endMinute] = course.end.split(':').map(Number);
+  const [startHour, startMinute] = schedule.start.split(':').map(Number);
+  const [endHour, endMinute] = schedule.end.split(':').map(Number);
   if (currentMinutes < startHour * 60 + startMinute) return 'upcoming';
   if (currentMinutes < endHour * 60 + endMinute) return 'live';
   return 'done';
@@ -344,25 +415,26 @@ function render(now = new Date()) {
   dateButton.classList.toggle('active', !isToday); dateButton.setAttribute('aria-pressed', String(!isToday));
   $('#picked-date-short').textContent = info.shortFormatted;
   $('#drawer-app-version').textContent = toFaDigits(APP_VERSION);
-  const matching = state.courses.filter(course => course.daysByWeek?.[info.weekIndex]?.includes(info.weekday) && course.start && course.end).sort((a, b) => a.start.localeCompare(b.start));
-  const rendered = matching.map(course => ({ course, status: statusFor(course, info.currentMinutes, info.isToday) }));
+  const matching = state.courses.map(course => ({ course, schedule: course.scheduleByWeek?.[info.weekIndex]?.find(entry => entry.day === info.weekday) }))
+    .filter(item => scheduleEntryIsComplete(item.schedule)).sort((a, b) => a.schedule.start.localeCompare(b.schedule.start));
+  const rendered = matching.map(item => ({ ...item, status: statusFor(item.schedule, info.currentMinutes, info.isToday) }));
   $('#empty-title').textContent = info.isToday
     ? matching.length ? 'کلاس‌های امروز تمام شده‌اند' : 'امروز کلاسی ندارید'
     : `${info.weekday} ${info.shortFormatted} کلاسی ندارید`;
   const list = $('#schedule-list');
-  list.replaceChildren(...rendered.map(item => createCourseCard(item.course, item.status)));
+  list.replaceChildren(...rendered.map(item => createCourseCard(item.course, item.status, false, item.schedule)));
   $('#empty-state').hidden = rendered.length !== 0; list.hidden = rendered.length === 0;
-  const byDay = [...state.courses].sort((a, b) => a.start.localeCompare(b.start) || a.title.localeCompare(b.title, 'fa'));
-  $('#manage-course-list').replaceChildren(...byDay.map(course => createCourseCard(course, !course.daysByWeek.some(days => days.length) || !course.start || !course.end ? 'incomplete' : 'upcoming', true)));
+  const byDay = [...state.courses].sort((a, b) => firstCourseStart(a).localeCompare(firstCourseStart(b)) || a.title.localeCompare(b.title, 'fa'));
+  $('#manage-course-list').replaceChildren(...byDay.map(course => createCourseCard(course, courseScheduleIsIncomplete(course) ? 'incomplete' : 'upcoming', true)));
   $('#manage-empty').hidden = byDay.length !== 0;
   syncWeekRowLabels();
 }
 
-function createCourseCard(course, status, editable = false) {
+function createCourseCard(course, status, editable = false, schedule = null) {
   const article = document.createElement('article');
   article.className = `course-card status-${status} ${status === 'incomplete' ? 'incomplete' : ''} ${editable ? 'editable-card' : ''}`;
   const time = document.createElement('div'); time.className = 'course-time';
-  time.textContent = status === 'incomplete' ? '—' : `${displayTime(course.start)} – ${displayTime(course.end)}`;
+  time.textContent = editable ? formatCourseSchedule(course, true) : scheduleEntryIsComplete(schedule) ? `${displayTime(schedule.start)} – ${displayTime(schedule.end)}` : '—';
   const info = document.createElement('div'); info.className = 'course-info';
   const title = document.createElement('h3'); title.textContent = course.title; info.append(title);
   if (editable) {
@@ -439,9 +511,10 @@ function openCourseDialog(course = null) {
   const form = $('#course-form'); form.reset(); $('#form-error').hidden = true;
   $('#dialog-title').textContent = course ? 'ویرایش درس' : 'افزودن درس';
   $('#course-id').value = course?.id || ''; $('#course-title').value = course?.title || '';
-  selectedDaysByWeek = course ? course.daysByWeek.map(days => [...days]) : [[], []];
+  selectedScheduleByWeek = course ? course.scheduleByWeek.map(entries => entries.map(entry => ({ ...entry }))) : [[], []];
   syncDayPickers();
-  $('#course-start').value = course?.start || ''; $('#course-end').value = course?.end || ''; $('#course-class-name').value = course?.className || ''; $('#course-teacher').value = course?.teacher || '';
+  renderScheduleTimeRows();
+  $('#course-class-name').value = course?.className || ''; $('#course-teacher').value = course?.teacher || '';
   renderCourseLinkRows(course ? normalizeCourseLinks(course.links, course.teacherChannel) : []);
   $('#delete-course-button').hidden = !course;
   showAppModal($('#course-dialog')); $('#course-title').focus();
@@ -544,8 +617,7 @@ function openCourseDetails(course) {
   activeDetailsCourseId = course.id;
   const details = $('#course-details-dialog');
   $('#details-title').textContent = course.title;
-  $('#details-time').textContent = course.start && course.end ? `${displayTime(course.start)} – ${displayTime(course.end)}` : 'زمان ثبت نشده';
-  $('#details-days').textContent = formatDaysByWeek(course.daysByWeek);
+  $('#details-schedule').textContent = formatCourseSchedule(course);
   $('#details-class-name').textContent = course.className || 'ثبت نشده';
   $('#details-teacher').textContent = course.teacher || 'ثبت نشده';
   const links = normalizeCourseLinks(course.links, course.teacherChannel);
@@ -851,8 +923,12 @@ function parseAmozeshyarHtml(html) {
     const teacher = cells[indexes[1]].trim();
     const meetings = parseAmozeshyarSchedule(cells[indexes[2]]);
     const courseBase = { title: toFaDigits(title), teacher: toFaDigits(teacher), links: [], className: '', notes: [] };
-    if (!meetings.length) courses.push({ ...courseBase, id: makeId('amozeshyar'), daysByWeek: [[], []], start: '', end: '' });
-    else meetings.forEach(meeting => courses.push({ ...courseBase, ...meeting, id: makeId('amozeshyar') }));
+    const scheduleMaps = [new Map(), new Map()];
+    meetings.forEach(meeting => meeting.daysByWeek.forEach((days, weekIndex) => {
+      days.forEach(day => scheduleMaps[weekIndex].set(day, { day, start: meeting.start, end: meeting.end }));
+    }));
+    const scheduleByWeek = scheduleMaps.map(byDay => WEEK_DAY_ORDER.filter(day => byDay.has(day)).map(day => byDay.get(day)));
+    courses.push({ ...courseBase, id: makeId('amozeshyar'), scheduleByWeek });
   }
   if (!courses.length) throw new Error('هیچ درس معتبری در جدول آموزشیار پیدا نشد.');
   return courses;
@@ -864,11 +940,14 @@ function courseMatchKey(value) {
 
 function courseMatchScore(incoming, previous) {
   let score = 0;
-  if (incoming.start && incoming.start === previous.start) score += 2;
-  if (incoming.end && incoming.end === previous.end) score += 2;
   for (let week = 0; week < 2; week += 1) {
-    const oldDays = new Set(previous.daysByWeek[week]);
-    score += incoming.daysByWeek[week].filter(day => oldDays.has(day)).length;
+    for (const entry of incoming.scheduleByWeek[week]) {
+      const old = previous.scheduleByWeek[week].find(item => item.day === entry.day);
+      if (!old) continue;
+      score += 2;
+      if (entry.start && entry.start === old.start) score += 2;
+      if (entry.end && entry.end === old.end) score += 2;
+    }
   }
   return score;
 }
@@ -906,6 +985,7 @@ function enrichImportedCourses(importedCourses, previousCourses) {
     if (!previous) return course;
     return {
       ...course,
+      scheduleByWeek: course.scheduleByWeek.some(week => week.length) ? course.scheduleByWeek : previous.scheduleByWeek,
       className: course.className || previous.className,
       teacher: course.teacher || previous.teacher,
       links: course.links?.length ? course.links : normalizeCourseLinks(previous.links, previous.teacherChannel),
@@ -921,15 +1001,15 @@ async function previewAmozeshyarFile(file) {
     if (!file) return;
     const html = await readMhtHtml(file);
     const courses = normalizeCourses(parseAmozeshyarHtml(html));
-    const incomplete = courses.filter(course => !course.start || !course.end || !course.daysByWeek.some(days => days.length)).length;
+    const previewCourses = enrichImportedCourses(courses, state.courses);
+    const incomplete = previewCourses.filter(courseScheduleIsIncomplete).length;
     const enrichedCount = courses.filter(course => findPreviousCourseForImport(course, state.courses)).length;
     $('#amozeshyar-summary').textContent = numberFa.format(courses.length) + ' درس پیدا شد؛ ' + numberFa.format(incomplete) + ' درس نیاز به بررسی دارد.' + (enrichedCount ? ' اطلاعات تکمیلی ' + numberFa.format(enrichedCount) + ' درس از برنامهٔ قبلی حفظ می‌شود.' : '');
     $('#amozeshyar-apply-label').textContent = state.courses.length ? 'پشتیبان‌گیری و جایگزینی' : 'وارد کردن برنامه';
-    const list = $('#amozeshyar-preview-list'), items = courses.slice(0, 12).map(course => {
+    const list = $('#amozeshyar-preview-list'), items = previewCourses.slice(0, 12).map(course => {
       const item = document.createElement('li');
-      const time = course.start ? displayTime(course.start) + ' تا ' + displayTime(course.end) : 'زمان نیاز به تکمیل دارد';
-      const days = formatDaysByWeek(course.daysByWeek);
-      item.textContent = course.title + ' — ' + (course.teacher || 'استاد نامشخص') + ' — ' + time + ' — ' + days;
+      const schedule = formatCourseSchedule(course, true).replace(/\n/g, ' | ');
+      item.textContent = course.title + ' — ' + (course.teacher || 'استاد نامشخص') + ' — ' + schedule;
       return item;
     });
     if (courses.length > items.length) {
@@ -1168,18 +1248,31 @@ function init() {
       if (converted !== event.target.value) { event.target.value = converted; event.target.setSelectionRange(start, end); }
     });
   });
+  $('#course-form').addEventListener('input', event => {
+    const input = event.target.closest('.schedule-time-input');
+    if (!input) return;
+    const weekIndex = Number(input.dataset.weekIndex);
+    const entry = selectedScheduleByWeek[weekIndex]?.find(item => item.day === input.dataset.day);
+    if (entry) entry[input.dataset.field] = input.value;
+  });
   $('#course-form').addEventListener('submit', event => {
     event.preventDefault(); const values = new FormData(event.currentTarget);
     const title = toFaDigits(String(values.get('title') || '').trim());
-    const start = String(values.get('start') || ''), end = String(values.get('end') || ''), error = $('#form-error');
+    const error = $('#form-error');
     if (!title) { error.textContent = 'نام درس را وارد کنید.'; error.hidden = false; return; }
-    if ((start && !end) || (!start && end)) { error.textContent = 'برای ساعت، شروع و پایان را با هم وارد کنید.'; error.hidden = false; return; }
-    if (start && end && start >= end) { error.textContent = 'ساعت پایان باید بعد از ساعت شروع باشد.'; error.hidden = false; return; }
+    for (const [weekIndex, entries] of selectedScheduleByWeek.entries()) {
+      for (const entry of entries) {
+        const where = `${entry.day} در ${parityLabel(weekIndex)}`;
+        const hasStart = Boolean(entry.start), hasEnd = Boolean(entry.end);
+        if (hasStart !== hasEnd) { error.textContent = `برای ${where} ساعت شروع و پایان را با هم وارد کنید.`; error.hidden = false; return; }
+        if (hasStart && entry.start >= entry.end) { error.textContent = `ساعت پایان ${where} باید بعد از ساعت شروع باشد.`; error.hidden = false; return; }
+      }
+    }
     const { links, error: linkError } = collectCourseLinks();
     if (!links) { error.textContent = linkError; error.hidden = false; return; }
     const id = String(values.get('id') || makeId()), previous = state.courses.find(item => item.id === id);
     const course = {
-      id, title, daysByWeek: selectedDaysByWeek.map(days => [...days]), start, end,
+      id, title, scheduleByWeek: selectedScheduleByWeek.map(entries => entries.map(entry => ({ ...entry }))),
       className: toFaDigits(String(values.get('className') || '').trim()),
       teacher: toFaDigits(String(values.get('teacher') || '').trim()),
       links,

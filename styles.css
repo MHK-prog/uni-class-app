@@ -231,3 +231,13 @@ button:disabled{opacity:.62;cursor:wait}
 .course-card.status-done{border-right-color:#38bdf8;background:#101c2b;opacity:1}
 .status-done .status-pill{background:#142a3e;color:#70c4ff}
 @media(max-width:420px){.course-link-row{grid-template-columns:minmax(0,1fr)}.course-link-row .course-link-remove{grid-column:1}}
+
+/* Each selected weekday has its own time range in each cycle week. */
+.week-schedule-group{display:grid;gap:9px}
+.day-time-list{display:grid;gap:8px}
+.schedule-time-row{display:grid;grid-template-columns:minmax(60px,auto) minmax(0,1fr) minmax(0,1fr);align-items:end;gap:8px;padding:9px;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+.schedule-time-day{align-self:center;color:var(--text);font-size:12px}
+.schedule-time-row .field-label{min-width:0;margin:0;gap:4px;font-size:11px}
+.schedule-time-row .field-label input{height:42px;padding-inline:4px;text-align:center;direction:ltr}
+.editable-card .course-time{max-width:100%;align-self:start;padding-top:2px;white-space:pre-line;line-height:1.65;overflow-wrap:anywhere}
+.details-schedule{white-space:pre-line;line-height:1.9}

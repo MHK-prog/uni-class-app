@@ -90,7 +90,7 @@
     <button class="menu-action page-link" type="button" data-page="amozeshyar">وارد کردن از آموزشیار</button>
     <button class="menu-action page-link" type="button" data-page="settings">تنظیمات</button>
     <button class="menu-action refresh-button" id="refresh-button" type="button"><img class="menu-item-icon" src="assets/icons/reload.webp" width="24" height="24" alt="" aria-hidden="true"><span>همگام‌سازی برنامه</span></button>
-    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">۱.۱۵.۲</span></footer>
+    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">۱.۱۵.۳</span></footer>
   </dialog>
   <dialog id="date-picker-dialog" class="date-picker-dialog" aria-labelledby="calendar-title">
     <div class="dialog-heading"><h2 id="calendar-title">انتخاب تاریخ</h2><button type="button" class="icon-button close-calendar" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>
@@ -105,13 +105,15 @@
       <input id="course-id" name="id" type="hidden">
       <label class="field-label">نام درس<input name="title" id="course-title" maxlength="80" required placeholder="نام درس"></label>
       <div class="field-label schedule-picker">
-        <span>روزهای برگزاری</span>
-        <div class="week-day-row"><span class="week-row-label">هفتهٔ اول</span><div class="day-circles" id="week-one-days" data-week-index="0"></div></div>
-        <div class="week-day-row"><span class="week-row-label">هفتهٔ دوم</span><div class="day-circles" id="week-two-days" data-week-index="1"></div></div>
-      </div>
-      <div class="field-row">
-        <label class="field-label">شروع<input name="start" id="course-start" type="time"></label>
-        <label class="field-label">پایان<input name="end" id="course-end" type="time"></label>
+        <span>روزها و ساعت‌های برگزاری</span>
+        <div class="week-schedule-group">
+          <div class="week-day-row"><span class="week-row-label">هفتهٔ اول</span><div class="day-circles" id="week-one-days" data-week-index="0"></div></div>
+          <div class="day-time-list" id="week-one-times"></div>
+        </div>
+        <div class="week-schedule-group">
+          <div class="week-day-row"><span class="week-row-label">هفتهٔ دوم</span><div class="day-circles" id="week-two-days" data-week-index="1"></div></div>
+          <div class="day-time-list" id="week-two-times"></div>
+        </div>
       </div>
       <div class="field-row">
         <label class="field-label">نام کلاس<input name="className" id="course-class-name" type="text" maxlength="50" placeholder="اختیاری"></label>
@@ -129,8 +131,7 @@
   <dialog id="course-details-dialog" class="course-details-dialog">
     <div class="dialog-heading"><h2 id="details-title">جزئیات درس</h2><button type="button" class="icon-button close-details" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>
     <dl class="details-list">
-      <div><dt>ساعت</dt><dd id="details-time"></dd></div>
-      <div><dt>روزهای برگزاری</dt><dd id="details-days"></dd></div>
+      <div><dt>روز و ساعت</dt><dd id="details-schedule" class="details-schedule"></dd></div>
       <div><dt>نام کلاس</dt><dd id="details-class-name"></dd></div>
       <div><dt>استاد</dt><dd id="details-teacher"></dd></div>
       <div><dt>لینک‌ها</dt><dd id="details-course-links" class="details-course-links"></dd></div>

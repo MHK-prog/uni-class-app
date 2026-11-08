@@ -76,6 +76,6 @@ jobs:
             android/app/build/outputs/apk/release/app-release.apk#class-schedule.apk \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "برنامهٔ کلاس‌ها برای اندروید $version" \
+            --title "ایکلاس برای اندروید $version" \
             --notes "نسخهٔ $version" \
             --latest

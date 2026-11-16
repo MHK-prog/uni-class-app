@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.15.4';
+const APP_VERSION = '1.15.5';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -21,6 +21,10 @@ let selectedDateMode = 'today';
 let selectedScheduleByWeek = [[], []];
 let toastTimer;
 let activeDetailsCourseId = '';
+let activeDetailsReturnPage = 'dashboard';
+let activeCourseDraft = null;
+let notesReturnPage = 'dashboard';
+let activeCourseField = '';
 let activeNotesCourseId = '';
 let activeModalCount = 0;
 let lockedScrollY = 0;
@@ -130,17 +134,18 @@ function normalizeScheduleByWeek(raw, oldSettings, flipWeeks = false) {
   if (Array.isArray(stored) || (stored && typeof stored === 'object')) {
     const source = Array.isArray(stored) ? stored : [stored.first || stored.week1 || [], stored.second || stored.week2 || []];
     let rows = [0, 1].map(index => {
-      const byDay = new Map();
+      const sessions = new Map();
       for (const item of Array.isArray(source[index]) ? source[index] : []) {
         const day = item?.day || item?.weekday;
         if (!WEEK_DAY_ORDER.includes(day)) continue;
-        byDay.set(day, {
+        const session = {
           day,
           start: validTime(item.start || item.startTime) ? (item.start || item.startTime) : '',
           end: validTime(item.end || item.endTime) ? (item.end || item.endTime) : ''
-        });
+        };
+        sessions.set(`${day}|${session.start}|${session.end}`, session);
       }
-      return WEEK_DAY_ORDER.filter(day => byDay.has(day)).map(day => byDay.get(day));
+      return [...sessions.values()].sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day) || a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
     });
     if (flipWeeks) rows = [rows[1], rows[0]];
     return rows;
@@ -252,7 +257,7 @@ function renderCalendar() {
 
 function openDatePicker(target) {
   calendarTarget = target;
-  calendarDraftISO = target === 'term' ? state.cycle.termStartDate : targetDay(1).iso;
+  calendarDraftISO = target === 'term' ? state.cycle.termStartDate : targetDay(0).iso;
   if (!isValidISODate(calendarDraftISO)) calendarDraftISO = targetDay(0).iso;
   calendarCursorISO = calendarDraftISO;
   $('#calendar-title').textContent = target === 'term' ? 'تاریخ شروع ترم' : 'انتخاب تاریخ برنامه';
@@ -308,7 +313,7 @@ function firstCourseStart(course) {
 
 function formatCourseSchedule(course, compact = false) {
   return [0, 1].map(index => {
-    const entries = [...(course.scheduleByWeek?.[index] || [])].sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day));
+    const entries = [...(course.scheduleByWeek?.[index] || [])].sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day) || a.start.localeCompare(b.start));
     const label = parityForCycleIndex(index) === 'even' ? 'زوج' : 'فرد';
     const items = entries.map(entry => {
       const day = compact ? WEEK_DAY_SHORT[entry.day] : entry.day;
@@ -328,63 +333,6 @@ function currentSaturdayISO(now = new Date()) {
 function syncTermSettings() {
   const label = $('#term-start-date-label');
   if (label) label.textContent = jalaliDateFormatter.format(new Date(`${state.cycle.termStartDate}T12:00:00Z`));
-}
-
-function syncWeekRowLabels() {
-  document.querySelectorAll('.week-row-label').forEach(label => {
-    const index = Number(label.nextElementSibling?.dataset.weekIndex);
-    label.textContent = parityLabel(index);
-  });
-  document.querySelectorAll('.day-circle').forEach(button => {
-    button.setAttribute('aria-label', `${parityLabel(Number(button.dataset.weekIndex))}، ${button.title}`);
-  });
-}
-
-function syncDayPickers() {
-  document.querySelectorAll('.day-circle').forEach(button => {
-    const weekIndex = Number(button.dataset.weekIndex), active = selectedScheduleByWeek[weekIndex].some(entry => entry.day === button.dataset.day);
-    button.classList.toggle('selected', active);
-    button.setAttribute('aria-pressed', String(active));
-  });
-}
-
-function renderScheduleTimeRows() {
-  [0, 1].forEach(weekIndex => {
-    const container = $(`#week-${weekIndex === 0 ? 'one' : 'two'}-times`);
-    const rows = selectedScheduleByWeek[weekIndex].map(entry => {
-      const row = document.createElement('div'); row.className = 'schedule-time-row';
-      const day = document.createElement('strong'); day.className = 'schedule-time-day'; day.textContent = entry.day;
-      row.append(day);
-      for (const [field, labelText] of [['start', 'شروع'], ['end', 'پایان']]) {
-        const label = document.createElement('label'); label.className = 'field-label'; label.textContent = labelText;
-        const input = document.createElement('input'); input.type = 'time'; input.className = 'schedule-time-input';
-        input.dataset.weekIndex = String(weekIndex); input.dataset.day = entry.day; input.dataset.field = field;
-        input.setAttribute('aria-label', `${parityLabel(weekIndex)}، ${entry.day}، ${labelText}`);
-        input.value = entry[field] || ''; label.append(input); row.append(label);
-      }
-      return row;
-    });
-    container.replaceChildren(...rows);
-  });
-}
-
-function initDayPickers() {
-  document.querySelectorAll('.day-circles').forEach(row => {
-    const weekIndex = Number(row.dataset.weekIndex);
-    WEEK_DAY_ORDER.forEach(day => {
-      const button = document.createElement('button');
-      button.type = 'button'; button.className = 'day-circle'; button.dataset.day = day; button.dataset.weekIndex = String(weekIndex);
-      button.textContent = WEEK_DAY_SHORT[day]; button.title = day; button.setAttribute('aria-label', `${parityLabel(weekIndex)}، ${day}`); button.setAttribute('aria-pressed', 'false');
-      button.addEventListener('click', () => {
-        const selectedIndex = selectedScheduleByWeek[weekIndex].findIndex(item => item.day === day);
-        if (selectedIndex >= 0) selectedScheduleByWeek[weekIndex].splice(selectedIndex, 1);
-        else selectedScheduleByWeek[weekIndex].push({ day, start: '', end: '' });
-        syncDayPickers();
-        renderScheduleTimeRows();
-      });
-      row.append(button);
-    });
-  });
 }
 
 function statusFor(schedule, currentMinutes, isToday) {
@@ -407,17 +355,18 @@ function render(now = new Date()) {
   if (selectedDateMode === 'today') selectedDateISO = today.iso;
   const info = selectedInfo(now), current = iranParts(now);
   $('#iran-clock').textContent = toFaDigits(`${String(current.hour).padStart(2, '0')}:${String(current.minute).padStart(2, '0')}`);
-  $('#selected-date').textContent = info.formatted;
-  $('#today-name').textContent = today.weekday;
+  $('#selected-date').textContent = info.shortFormatted;
+  $('#selected-weekday').textContent = info.weekday;
   $('#cycle-week-label').textContent = parityLabel(info.weekIndex);
   const isToday = info.iso === today.iso, todayButton = $('.day-option[data-day="today"]');
   todayButton.classList.toggle('active', isToday); todayButton.setAttribute('aria-pressed', String(isToday));
   const dateButton = $('#pick-date-button');
   dateButton.classList.toggle('active', !isToday); dateButton.setAttribute('aria-pressed', String(!isToday));
-  $('#picked-date-short').textContent = info.shortFormatted;
   $('#drawer-app-version').textContent = toFaDigits(APP_VERSION);
-  const matching = state.courses.map(course => ({ course, schedule: course.scheduleByWeek?.[info.weekIndex]?.find(entry => entry.day === info.weekday) }))
-    .filter(item => scheduleEntryIsComplete(item.schedule)).sort((a, b) => a.schedule.start.localeCompare(b.schedule.start));
+  const matching = state.courses.flatMap(course => (course.scheduleByWeek?.[info.weekIndex] || [])
+    .filter(entry => entry.day === info.weekday && scheduleEntryIsComplete(entry))
+    .map(schedule => ({ course, schedule })))
+    .sort((a, b) => a.schedule.start.localeCompare(b.schedule.start) || a.schedule.end.localeCompare(b.schedule.end));
   const rendered = matching.map(item => ({ ...item, status: statusFor(item.schedule, info.currentMinutes, info.isToday) }));
   $('#empty-title').textContent = info.isToday
     ? matching.length ? 'کلاس‌های امروز تمام شده‌اند' : 'امروز کلاسی ندارید'
@@ -428,7 +377,6 @@ function render(now = new Date()) {
   const byDay = [...state.courses].sort((a, b) => firstCourseStart(a).localeCompare(firstCourseStart(b)) || a.title.localeCompare(b.title, 'fa'));
   $('#manage-course-list').replaceChildren(...byDay.map(course => createCourseCard(course, courseScheduleIsIncomplete(course) ? 'incomplete' : 'upcoming', true)));
   $('#manage-empty').hidden = byDay.length !== 0;
-  syncWeekRowLabels();
 }
 
 function createCourseCard(course, status, editable = false, schedule = null) {
@@ -440,18 +388,20 @@ function createCourseCard(course, status, editable = false, schedule = null) {
   const title = document.createElement('h3'); title.textContent = course.title; info.append(title);
   if (editable) {
     const actions = document.createElement('div'); actions.className = 'card-actions';
-    const details = document.createElement('button'); details.type = 'button'; details.className = 'details-button secondary-button'; details.textContent = 'جزئیات'; details.setAttribute('aria-label', `جزئیات ${course.title}`); details.addEventListener('click', () => openCourseDetails(course));
-    actions.append(details); article.append(time, info, actions);
+    const details = document.createElement('button'); details.type = 'button'; details.className = 'details-button secondary-button'; details.textContent = '⋮'; details.setAttribute('aria-label', `جزئیات ${course.title}`); details.title = 'جزئیات'; details.addEventListener('click', () => openCourseDetails(course, activePageName()));
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'card-action delete-course-card'; remove.setAttribute('aria-label', `حذف ${course.title}`); remove.title = 'حذف درس';
+    const icon = document.createElement('img'); icon.src = 'assets/icons/delete.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true'); remove.append(icon); remove.addEventListener('click', () => removeCourse(course.id));
+    actions.append(details, remove); article.append(time, info, actions);
   } else {
     article.tabIndex = 0;
     article.setAttribute('role', 'button');
     article.setAttribute('aria-label', course.title);
     article.setAttribute('aria-haspopup', 'dialog');
-    article.addEventListener('click', () => openCourseDetails(course));
+    article.addEventListener('click', () => openCourseDetails(course, activePageName()));
     article.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        openCourseDetails(course);
+        openCourseDetails(course, activePageName());
       }
     });
     const meta = document.createElement('div'); meta.className = 'course-meta';
@@ -508,17 +458,132 @@ function collectCourseLinks() {
   return { links, error: '' };
 }
 
-function openCourseDialog(course = null) {
-  const form = $('#course-form'); form.reset(); $('#form-error').hidden = true;
-  $('#dialog-title').textContent = course ? 'ویرایش درس' : 'افزودن درس';
-  $('#course-id').value = course?.id || ''; $('#course-title').value = course?.title || '';
-  selectedScheduleByWeek = course ? course.scheduleByWeek.map(entries => entries.map(entry => ({ ...entry }))) : [[], []];
-  syncDayPickers();
-  renderScheduleTimeRows();
-  $('#course-class-name').value = course?.className || ''; $('#course-teacher').value = course?.teacher || '';
-  renderCourseLinkRows(course ? normalizeCourseLinks(course.links, course.teacherChannel) : []);
-  $('#delete-course-button').hidden = !course;
-  showAppModal($('#course-dialog')); $('#course-title').focus();
+function activePageName() {
+  return document.querySelector('[data-page-panel]:not([hidden])')?.dataset.pagePanel || 'dashboard';
+}
+
+function activeDetailsCourse() {
+  return state.courses.find(course => course.id === activeDetailsCourseId) || activeCourseDraft;
+}
+
+function openCourseDetails(course, returnPage = activePageName(), isDraft = false) {
+  if (!course) return;
+  activeDetailsCourseId = course.id;
+  activeDetailsReturnPage = returnPage;
+  activeCourseDraft = isDraft ? course : null;
+  $('#details-title').textContent = course.title || 'درس تازه';
+  $('#details-course-title').textContent = course.title || 'برای ثبت نام درس بزنید';
+  $('#details-schedule').textContent = formatCourseSchedule(course) || 'ثبت نشده';
+  $('#details-class-name').textContent = course.className || 'ثبت نشده';
+  $('#details-teacher').textContent = course.teacher || 'ثبت نشده';
+  const links = normalizeCourseLinks(course.links, course.teacherChannel);
+  $('#details-course-links').textContent = links.length ? `${numberFa.format(links.length)} لینک` : 'ثبت نشده';
+  $('#course-notes-button').disabled = Boolean(activeCourseDraft);
+  showAppModal($('#course-details-dialog'));
+}
+
+function openNewCourseDetails() {
+  const course = { id: makeId('course'), title: '', scheduleByWeek: [[], []], className: '', teacher: '', links: [], notes: [] };
+  activeCourseDraft = course;
+  openCourseDetails(course, activePageName(), true);
+  openCourseFieldEditor('title');
+}
+
+function openCourseFieldEditor(field) {
+  const course = activeDetailsCourse();
+  if (!course) return;
+  const fields = {
+    title: { label: 'نام درس', title: 'نام درس', maxLength: 80 },
+    className: { label: 'نام کلاس', title: 'نام کلاس', maxLength: 50 },
+    teacher: { label: 'نام استاد', title: 'نام استاد', maxLength: 80 }
+  };
+  const config = fields[field];
+  if (!config) return;
+  activeCourseField = field;
+  $('#course-field-dialog-title').textContent = config.title;
+  $('#course-field-label').textContent = config.label;
+  $('#course-field-input').maxLength = config.maxLength;
+  $('#course-field-input').value = course[field] || '';
+  $('#course-field-error').hidden = true;
+  showAppModal($('#course-field-dialog'));
+  $('#course-field-input').focus();
+}
+
+function persistActiveDetailsCourse(message = 'تغییرات ذخیره شد.') {
+  const course = activeDetailsCourse();
+  if (!course) return;
+  const existingIndex = state.courses.findIndex(item => item.id === course.id);
+  if (existingIndex >= 0) state.courses[existingIndex] = course;
+  else if (course.title.trim()) {
+    state.courses.push(course);
+    activeCourseDraft = null;
+  }
+  saveState(); render(); refreshCourseDetails();
+  if (message) showToast(message);
+}
+
+function openScheduleEditor() {
+  const course = activeDetailsCourse();
+  if (!course) return;
+  selectedScheduleByWeek = course.scheduleByWeek.map(entries => entries.map(entry => ({ ...entry })));
+  $('#schedule-week').value = '0'; $('#schedule-start').value = ''; $('#schedule-end').value = '';
+  $('#schedule-error').hidden = true;
+  renderScheduleEntryList();
+  showAppModal($('#schedule-dialog'));
+}
+
+function renderScheduleEntryList() {
+  const mode = $('#schedule-week').value;
+  const sessions = [];
+  if (mode === 'both') {
+    const grouped = new Map();
+    selectedScheduleByWeek.forEach((entries, weekIndex) => entries.forEach(entry => {
+      const key = `${entry.day}|${entry.start}|${entry.end}`;
+      if (!grouped.has(key)) grouped.set(key, { ...entry, weeks: [] });
+      grouped.get(key).weeks.push(weekIndex);
+    }));
+    sessions.push(...grouped.values());
+  } else {
+    const weekIndex = Number(mode);
+    selectedScheduleByWeek[weekIndex].forEach((entry, entryIndex) => sessions.push({ ...entry, weeks: [weekIndex], entryIndex }));
+  }
+  sessions.sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day) || a.start.localeCompare(b.start));
+  const list = $('#schedule-entry-list');
+  list.replaceChildren(...sessions.map(session => {
+    const row = document.createElement('div'); row.className = 'schedule-entry';
+    const text = document.createElement('span');
+    const weekLabel = session.weeks.length === 2 ? 'هر دو هفته' : parityLabel(session.weeks[0]);
+    text.textContent = `${weekLabel}، ${session.day}، ${session.start && session.end ? `${displayTime(session.start)} تا ${displayTime(session.end)}` : 'ساعت ثبت نشده'}`;
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary-button icon-action schedule-entry-remove'; remove.setAttribute('aria-label', 'حذف زمان');
+    const icon = document.createElement('img'); icon.src = 'assets/icons/delete.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true'); remove.append(icon);
+    remove.addEventListener('click', () => {
+      const key = `${session.day}|${session.start}|${session.end}`;
+      session.weeks.forEach(weekIndex => {
+        const entryIndex = mode === 'both'
+          ? selectedScheduleByWeek[weekIndex].findIndex(entry => `${entry.day}|${entry.start}|${entry.end}` === key)
+          : session.entryIndex;
+        if (entryIndex >= 0) selectedScheduleByWeek[weekIndex].splice(entryIndex, 1);
+      });
+      renderScheduleEntryList();
+    });
+    row.append(text, remove); return row;
+  }));
+}
+
+function addScheduleEntry() {
+  const error = $('#schedule-error');
+  const day = $('#schedule-day').value, start = $('#schedule-start').value, end = $('#schedule-end').value;
+  if (!validTime(start) || !validTime(end) || start >= end) {
+    error.textContent = 'ساعت شروع و پایان معتبر را وارد کنید.'; error.hidden = false; return;
+  }
+  const weeks = $('#schedule-week').value === 'both' ? [0, 1] : [Number($('#schedule-week').value)];
+  weeks.forEach(weekIndex => {
+    const exists = selectedScheduleByWeek[weekIndex].some(entry => entry.day === day && entry.start === start && entry.end === end);
+    if (!exists) selectedScheduleByWeek[weekIndex].push({ day, start, end });
+    selectedScheduleByWeek[weekIndex].sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day) || a.start.localeCompare(b.start));
+  });
+  $('#schedule-start').value = ''; $('#schedule-end').value = ''; error.hidden = true;
+  renderScheduleEntryList();
 }
 
 function showAppModal(dialog) {
@@ -614,28 +679,9 @@ function handleModalClosed() {
   }
 }
 
-function openCourseDetails(course) {
-  activeDetailsCourseId = course.id;
-  const details = $('#course-details-dialog');
-  $('#details-title').textContent = course.title;
-  $('#details-schedule').textContent = formatCourseSchedule(course);
-  $('#details-class-name').textContent = course.className || 'ثبت نشده';
-  $('#details-teacher').textContent = course.teacher || 'ثبت نشده';
-  const links = normalizeCourseLinks(course.links, course.teacherChannel);
-  const linkList = $('#details-course-links');
-  if (!links.length) linkList.textContent = 'ثبت نشده';
-  else linkList.replaceChildren(...links.map(link => {
-    const anchor = document.createElement('a');
-    anchor.className = 'details-course-link'; anchor.href = link.url; anchor.target = '_blank';
-    anchor.rel = 'noopener noreferrer'; anchor.textContent = link.title;
-    return anchor;
-  }));
-  showAppModal(details);
-}
-
 function refreshCourseDetails() {
-  const course = state.courses.find(item => item.id === activeDetailsCourseId);
-  if (course && $('#course-details-dialog').open) openCourseDetails(course);
+  const course = activeDetailsCourse();
+  if (course && $('#course-details-dialog').open) openCourseDetails(course, activeDetailsReturnPage, Boolean(activeCourseDraft));
 }
 
 function switchPage(destination) {
@@ -653,17 +699,19 @@ function switchPage(destination) {
 function handleAppBack() {
   const drawer = $('#menu-drawer'), drawerWasOpen = drawer.open;
   if (drawerWasOpen) closeMenuDrawer();
-  const activeDialog = [...document.querySelectorAll('dialog')].find(dialog => dialog.open && dialog.id !== 'menu-drawer');
+  const activeDialog = [...document.querySelectorAll('dialog')].filter(dialog => dialog.open && dialog.id !== 'menu-drawer').at(-1);
   if (activeDialog) { activeDialog.close(); return true; }
   const activePage = document.querySelector('[data-page-panel]:not([hidden])')?.dataset.pagePanel || 'dashboard';
-  if (activePage !== 'dashboard') switchPage('dashboard');
+  if (activePage === 'notes') switchPage(notesReturnPage);
+  else if (activePage !== 'dashboard') switchPage('dashboard');
   return drawerWasOpen || activePage !== 'dashboard';
 }
 
 window.handleAppBack = handleAppBack;
 
-function openNotesPage(courseId) {
+function openNotesPage(courseId, returnPage = activeDetailsReturnPage) {
   activeNotesCourseId = courseId;
+  notesReturnPage = returnPage;
   renderNotesPage();
   switchPage('notes');
   if ($('#course-details-dialog').open) $('#course-details-dialog').close();
@@ -671,7 +719,7 @@ function openNotesPage(courseId) {
 
 function renderNotesPage() {
   const course = state.courses.find(item => item.id === activeNotesCourseId);
-  if (!course) { switchPage('courses'); return; }
+  if (!course) { switchPage(notesReturnPage || 'dashboard'); return; }
   $('#notes-course-name').textContent = course.title;
   const list = $('#notes-list');
   list.replaceChildren(...course.notes.map(note => {
@@ -711,10 +759,18 @@ function removeNote(noteId) {
 function removeCourse(id) {
   const course = state.courses.find(item => item.id === id);
   if (!course || !window.confirm(`درس «${course.title}» حذف شود؟`)) return;
-  state.courses = state.courses.filter(item => item.id !== id); saveState(); $('#course-dialog').close();
+  state.courses = state.courses.filter(item => item.id !== id); saveState();
   if ($('#course-details-dialog').open && activeDetailsCourseId === id) $('#course-details-dialog').close();
-  if (activeNotesCourseId === id) switchPage('courses');
+  if (activeNotesCourseId === id) switchPage(notesReturnPage || 'dashboard');
   render(); showToast('درس حذف شد.');
+}
+
+function stepDashboardDate(days) {
+  const todayISO = targetDay(0).iso;
+  const base = selectedDateMode === 'today' ? todayISO : selectedDateISO;
+  selectedDateISO = shiftISODate(base, days);
+  selectedDateMode = selectedDateISO === todayISO ? 'today' : 'custom';
+  render();
 }
 
 function showToast(message) {
@@ -958,22 +1014,20 @@ function parseAmozeshyarHtml(html) {
     };
     const key = `${courseMatchKey(courseBase.title)}|${courseMatchKey(courseBase.teacher)}`;
     if (!coursesByKey.has(key)) {
-      coursesByKey.set(key, { ...courseBase, id: makeId('amozeshyar'), scheduleMaps: [new Map(), new Map()] });
+      coursesByKey.set(key, { ...courseBase, id: makeId('amozeshyar'), scheduleEntries: [[], []] });
     }
     const course = coursesByKey.get(key);
     if (!course.className && courseBase.className) course.className = courseBase.className;
     meetings.forEach(meeting => meeting.daysByWeek.forEach((days, weekIndex) => {
-      days.forEach(day => {
-        const previous = course.scheduleMaps[weekIndex].get(day);
-        const start = previous && previous.start < meeting.start ? previous.start : meeting.start;
-        const end = previous && previous.end > meeting.end ? previous.end : meeting.end;
-        course.scheduleMaps[weekIndex].set(day, { day, start, end });
-      });
+      days.forEach(day => course.scheduleEntries[weekIndex].push({ day, start: meeting.start, end: meeting.end }));
     }));
   }
   const courses = [...coursesByKey.values()].map(course => {
-    const scheduleByWeek = course.scheduleMaps.map(byDay => WEEK_DAY_ORDER.filter(day => byDay.has(day)).map(day => byDay.get(day)));
-    const { scheduleMaps, ...result } = course;
+    const scheduleByWeek = course.scheduleEntries.map(entries => {
+      const sessions = new Map(entries.map(entry => [`${entry.day}|${entry.start}|${entry.end}`, entry]));
+      return [...sessions.values()].sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day) || a.start.localeCompare(b.start));
+    });
+    const { scheduleEntries, ...result } = course;
     return { ...result, scheduleByWeek };
   });
   if (!courses.length) throw new Error('\u0647\u06cc\u0686 \u062f\u0631\u0633 \u0645\u0639\u062a\u0628\u0631\u06cc \u062f\u0631 \u062c\u062f\u0648\u0644 \u0622\u0645\u0648\u0632\u0634\u06cc\u0627\u0631 \u067e\u06cc\u062f\u0627 \u0646\u0634\u062f.');
@@ -981,10 +1035,9 @@ function parseAmozeshyarHtml(html) {
 }
 
 function courseScheduleSignature(course) {
-  return [0, 1].map(weekIndex => WEEK_DAY_ORDER.map(day => {
-    const entry = course.scheduleByWeek?.[weekIndex]?.find(item => item.day === day);
-    return entry ? `${day}:${entry.start}-${entry.end}` : '';
-  }).filter(Boolean).join('|')).join('||');
+  return [0, 1].map(weekIndex => [...(course.scheduleByWeek?.[weekIndex] || [])]
+    .sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day) || a.start.localeCompare(b.start))
+    .map(entry => `${entry.day}:${entry.start}-${entry.end}`).join('|')).join('||');
 }
 
 function courseHasSchedule(course) {
@@ -1013,11 +1066,11 @@ function courseMatchScore(incoming, previous) {
   let score = 0;
   for (let week = 0; week < 2; week += 1) {
     for (const entry of incoming.scheduleByWeek[week]) {
-      const old = previous.scheduleByWeek[week].find(item => item.day === entry.day);
-      if (!old) continue;
+      const old = previous.scheduleByWeek[week].filter(item => item.day === entry.day);
+      if (!old.length) continue;
       score += 2;
-      if (entry.start && entry.start === old.start) score += 2;
-      if (entry.end && entry.end === old.end) score += 2;
+      if (old.some(item => entry.start && entry.start === item.start)) score += 2;
+      if (old.some(item => entry.end && entry.end === item.end)) score += 2;
     }
   }
   return score;
@@ -1191,17 +1244,21 @@ async function importSchedule(file) {
 }
 
 function init() {
-  initDayPickers();
+  WEEK_DAY_ORDER.forEach(day => {
+    const option = document.createElement('option'); option.value = day; option.textContent = day;
+    $('#schedule-day').append(option);
+  });
   document.querySelectorAll('.day-option[data-day]').forEach(button => button.addEventListener('click', () => {
     selectedDateMode = 'today';
     selectedDateISO = targetDay(0).iso;
     render();
   }));
+  $('#previous-day-button').addEventListener('click', () => stepDashboardDate(-1));
+  $('#next-day-button').addEventListener('click', () => stepDashboardDate(1));
   $('#pick-date-button').addEventListener('click', () => openDatePicker('dashboard'));
   $('#term-start-date-picker').addEventListener('click', () => openDatePicker('term'));
   $('#calendar-previous').addEventListener('click', () => { calendarCursorISO = shiftISODate(jalaliMonthStart(calendarCursorISO), -1); renderCalendar(); });
   $('#calendar-next').addEventListener('click', () => { calendarCursorISO = shiftISODate(jalaliMonthStart(calendarCursorISO), 40); renderCalendar(); });
-  $('#calendar-today').addEventListener('click', () => { calendarDraftISO = targetDay(0).iso; calendarCursorISO = calendarDraftISO; renderCalendar(); });
   $('.close-calendar').addEventListener('click', () => $('#date-picker-dialog').close());
   $('#calendar-apply').addEventListener('click', () => {
     if (calendarTarget === 'term') {
@@ -1221,7 +1278,7 @@ function init() {
     try { const registration = await navigator.serviceWorker?.getRegistration(); await registration?.update(); } catch (error) { console.warn('Could not check for app updates.', error); }
     window.location.reload();
   });
-  $('#add-course-button').addEventListener('click', () => openCourseDialog());
+  $('#add-course-button').addEventListener('click', openNewCourseDetails);
   $('#menu-button').addEventListener('click', () => { if (!$('#menu-drawer').open) openMenuDrawer(); });
   $('.close-menu').addEventListener('click', () => closeMenuDrawer());
   let horizontalGesture = null, gestureFrame = 0, suppressedBackdropTap = null;
@@ -1248,6 +1305,10 @@ function init() {
         dialog.classList.remove('drawer-entering', 'drawer-dragging', 'drawer-closing');
         dialog.style.removeProperty('transform');
         dialog.style.removeProperty('--drawer-backdrop-opacity');
+      }
+      if (dialog.id === 'course-details-dialog' && activeCourseDraft) {
+        activeCourseDraft = null;
+        activeDetailsCourseId = '';
       }
       handleModalClosed();
     });
@@ -1324,15 +1385,56 @@ function init() {
   $('#apply-amozeshyar-import').addEventListener('click', applyAmozeshyarImport);
   $('#restore-backup-button').addEventListener('click', () => $('#import-file').click());
   $('#import-file').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) importSchedule(file); });
-  $('.close-dialog').addEventListener('click', () => $('#course-dialog').close());
-  $('.cancel-dialog').addEventListener('click', () => $('#course-dialog').close());
-  $('#delete-course-button').addEventListener('click', () => removeCourse($('#course-id').value));
   $('.close-details').addEventListener('click', () => $('#course-details-dialog').close());
-  $('#edit-course-from-details').addEventListener('click', () => {
-    const course = state.courses.find(item => item.id === activeDetailsCourseId);
-    if (course) openCourseDialog(course);
+  $('#course-details-dialog').addEventListener('click', event => {
+    const row = event.target.closest('[data-course-editor], [data-course-field]');
+    if (!row) return;
+    if (row.dataset.courseEditor === 'schedule') openScheduleEditor();
+    else if (row.dataset.courseEditor === 'links') {
+      const course = activeDetailsCourse();
+      renderCourseLinkRows(course ? normalizeCourseLinks(course.links, course.teacherChannel) : []);
+      $('#course-links-error').hidden = true;
+      showAppModal($('#course-links-dialog'));
+    } else openCourseFieldEditor(row.dataset.courseField);
   });
-  $('#course-notes-button').addEventListener('click', () => openNotesPage(activeDetailsCourseId));
+  $('#course-notes-button').addEventListener('click', () => openNotesPage(activeDetailsCourseId, activeDetailsReturnPage));
+  $('.close-course-field').addEventListener('click', () => $('#course-field-dialog').close());
+  $('.cancel-course-field').addEventListener('click', () => $('#course-field-dialog').close());
+  $('#course-field-input').addEventListener('input', event => {
+    const start = event.target.selectionStart, end = event.target.selectionEnd;
+    const converted = toFaDigits(event.target.value);
+    if (converted !== event.target.value) { event.target.value = converted; event.target.setSelectionRange(start, end); }
+  });
+  $('#course-field-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const course = activeDetailsCourse(), error = $('#course-field-error');
+    if (!course) return;
+    const value = toFaDigits($('#course-field-input').value.trim());
+    if (activeCourseField === 'title' && !value) {
+      error.textContent = 'نام درس را وارد کنید.'; error.hidden = false; return;
+    }
+    course[activeCourseField] = value;
+    $('#course-field-dialog').close();
+    persistActiveDetailsCourse(activeCourseField === 'title' && activeCourseDraft ? 'درس اضافه شد.' : 'تغییرات ذخیره شد.');
+  });
+  $('.close-schedule').addEventListener('click', () => $('#schedule-dialog').close());
+  $('.cancel-schedule').addEventListener('click', () => $('#schedule-dialog').close());
+  $('#schedule-week').addEventListener('change', renderScheduleEntryList);
+  $('#add-schedule-entry').addEventListener('click', addScheduleEntry);
+  $('#schedule-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const course = activeDetailsCourse();
+    if (!course) return;
+    if ($('#schedule-start').value || $('#schedule-end').value) {
+      addScheduleEntry();
+      if (!$('#schedule-error').hidden) return;
+    }
+    course.scheduleByWeek = selectedScheduleByWeek.map(entries => entries.map(entry => ({ ...entry })));
+    $('#schedule-dialog').close();
+    persistActiveDetailsCourse('ساعت‌های برگزاری ذخیره شد.');
+  });
+  $('.close-course-links').addEventListener('click', () => $('#course-links-dialog').close());
+  $('.cancel-course-links').addEventListener('click', () => $('#course-links-dialog').close());
   $('#add-course-link-button').addEventListener('click', () => {
     const row = createCourseLinkRow();
     $('#course-links-list').append(row);
@@ -1344,13 +1446,16 @@ function init() {
     const converted = toFaDigits(event.target.value);
     if (converted !== event.target.value) { event.target.value = converted; event.target.setSelectionRange(start, end); }
   });
-  $('#details-course-links').addEventListener('click', event => {
-    const anchor = event.target.closest('a.details-course-link');
-    if (!anchor || !window.AndroidScheduleBridge?.openExternalUrl) return;
+  $('#course-links-form').addEventListener('submit', event => {
     event.preventDefault();
-    window.AndroidScheduleBridge.openExternalUrl(anchor.href);
+    const course = activeDetailsCourse(), result = collectCourseLinks();
+    if (!course) return;
+    if (!result.links) { $('#course-links-error').textContent = result.error; $('#course-links-error').hidden = false; return; }
+    course.links = result.links;
+    $('#course-links-dialog').close();
+    persistActiveDetailsCourse('لینک‌های کلاس ذخیره شد.');
   });
-  $('#back-to-courses').addEventListener('click', () => switchPage('courses'));
+  $('#back-to-courses').addEventListener('click', () => switchPage(notesReturnPage));
   $('#add-note-button').addEventListener('click', () => openNoteDialog());
   $('.close-note').addEventListener('click', () => $('#note-dialog').close());
   $('.cancel-note').addEventListener('click', () => $('#note-dialog').close());
@@ -1367,46 +1472,12 @@ function init() {
     saveState(); $('#note-dialog').close(); renderNotesPage(); refreshCourseDetails();
     showToast(index >= 0 ? 'یادداشت ویرایش شد.' : 'یادداشت اضافه شد.');
   });
-  ['course-title', 'course-class-name', 'course-teacher', 'note-title', 'note-text'].forEach(id => {
+  ['note-title', 'note-text'].forEach(id => {
     $(`#${id}`).addEventListener('input', event => {
       const start = event.target.selectionStart, end = event.target.selectionEnd;
       const converted = toFaDigits(event.target.value);
       if (converted !== event.target.value) { event.target.value = converted; event.target.setSelectionRange(start, end); }
     });
-  });
-  $('#course-form').addEventListener('input', event => {
-    const input = event.target.closest('.schedule-time-input');
-    if (!input) return;
-    const weekIndex = Number(input.dataset.weekIndex);
-    const entry = selectedScheduleByWeek[weekIndex]?.find(item => item.day === input.dataset.day);
-    if (entry) entry[input.dataset.field] = input.value;
-  });
-  $('#course-form').addEventListener('submit', event => {
-    event.preventDefault(); const values = new FormData(event.currentTarget);
-    const title = toFaDigits(String(values.get('title') || '').trim());
-    const error = $('#form-error');
-    if (!title) { error.textContent = 'نام درس را وارد کنید.'; error.hidden = false; return; }
-    for (const [weekIndex, entries] of selectedScheduleByWeek.entries()) {
-      for (const entry of entries) {
-        const where = `${entry.day} در ${parityLabel(weekIndex)}`;
-        const hasStart = Boolean(entry.start), hasEnd = Boolean(entry.end);
-        if (hasStart !== hasEnd) { error.textContent = `برای ${where} ساعت شروع و پایان را با هم وارد کنید.`; error.hidden = false; return; }
-        if (hasStart && entry.start >= entry.end) { error.textContent = `ساعت پایان ${where} باید بعد از ساعت شروع باشد.`; error.hidden = false; return; }
-      }
-    }
-    const { links, error: linkError } = collectCourseLinks();
-    if (!links) { error.textContent = linkError; error.hidden = false; return; }
-    const id = String(values.get('id') || makeId()), previous = state.courses.find(item => item.id === id);
-    const course = {
-      id, title, scheduleByWeek: selectedScheduleByWeek.map(entries => entries.map(entry => ({ ...entry }))),
-      className: toFaDigits(String(values.get('className') || '').trim()),
-      teacher: toFaDigits(String(values.get('teacher') || '').trim()),
-      links,
-      notes: previous?.notes || []
-    };
-    const index = state.courses.findIndex(item => item.id === id);
-    if (index >= 0) state.courses[index] = course; else state.courses.push(course);
-    saveState(); $('#course-dialog').close(); render(); refreshCourseDetails(); showToast(index >= 0 ? 'تغییرات درس ذخیره شد.' : 'درس اضافه شد.');
   });
   if (window.history?.pushState) {
     const appState = { classScheduleApp: true };

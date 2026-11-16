@@ -289,9 +289,10 @@ button:disabled{opacity:.62;cursor:wait}
 .editor-dialog .field-label{margin:0;font-size:14px}
 .editor-dialog .field-label input,.editor-dialog .field-label select{height:48px;font-size:16px}
 .schedule-dialog .schedule-add{justify-self:start;margin-top:2px}
-.schedule-entry-list{display:grid;gap:7px}
+.schedule-entry-list{display:grid;gap:7px;max-height:min(38dvh,300px);overflow-y:auto;overscroll-behavior:contain;padding:2px}
 .schedule-entry{display:grid;grid-template-columns:minmax(0,1fr) 48px;align-items:center;gap:8px;min-height:52px;padding:6px 8px;border:1px solid var(--line);border-radius:11px;background:var(--panel-2)}
 .schedule-entry>span{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.schedule-entry-empty{margin:0;padding:10px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:13px;text-align:center}
 .schedule-entry-remove{background:#29131b}
 .links-dialog .course-links-section{margin:0}
 .links-dialog .course-links-heading strong{font-size:14px}

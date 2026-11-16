@@ -533,22 +533,19 @@ function openScheduleEditor() {
 }
 
 function renderScheduleEntryList() {
-  const mode = $('#schedule-week').value;
-  const sessions = [];
-  if (mode === 'both') {
-    const grouped = new Map();
-    selectedScheduleByWeek.forEach((entries, weekIndex) => entries.forEach(entry => {
-      const key = `${entry.day}|${entry.start}|${entry.end}`;
-      if (!grouped.has(key)) grouped.set(key, { ...entry, weeks: [] });
-      grouped.get(key).weeks.push(weekIndex);
-    }));
-    sessions.push(...grouped.values());
-  } else {
-    const weekIndex = Number(mode);
-    selectedScheduleByWeek[weekIndex].forEach((entry, entryIndex) => sessions.push({ ...entry, weeks: [weekIndex], entryIndex }));
-  }
+  const grouped = new Map();
+  selectedScheduleByWeek.forEach((entries, weekIndex) => entries.forEach(entry => {
+    const key = `${entry.day}|${entry.start}|${entry.end}`;
+    if (!grouped.has(key)) grouped.set(key, { ...entry, key, weeks: [] });
+    grouped.get(key).weeks.push(weekIndex);
+  }));
+  const sessions = [...grouped.values()];
   sessions.sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day) || a.start.localeCompare(b.start));
   const list = $('#schedule-entry-list');
+  if (!sessions.length) {
+    const empty = document.createElement('p'); empty.className = 'schedule-entry-empty'; empty.textContent = 'هنوز زمانی برای این درس ثبت نشده است.';
+    list.replaceChildren(empty); return;
+  }
   list.replaceChildren(...sessions.map(session => {
     const row = document.createElement('div'); row.className = 'schedule-entry';
     const text = document.createElement('span');
@@ -557,11 +554,8 @@ function renderScheduleEntryList() {
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary-button icon-action schedule-entry-remove'; remove.setAttribute('aria-label', 'حذف زمان');
     const icon = document.createElement('img'); icon.src = 'assets/icons/delete.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true'); remove.append(icon);
     remove.addEventListener('click', () => {
-      const key = `${session.day}|${session.start}|${session.end}`;
       session.weeks.forEach(weekIndex => {
-        const entryIndex = mode === 'both'
-          ? selectedScheduleByWeek[weekIndex].findIndex(entry => `${entry.day}|${entry.start}|${entry.end}` === key)
-          : session.entryIndex;
+        const entryIndex = selectedScheduleByWeek[weekIndex].findIndex(entry => `${entry.day}|${entry.start}|${entry.end}` === session.key);
         if (entryIndex >= 0) selectedScheduleByWeek[weekIndex].splice(entryIndex, 1);
       });
       renderScheduleEntryList();

@@ -46,13 +46,30 @@
     </section>
 
     <section class="app-page notes-page" id="page-notes" data-page-panel="notes" hidden>
-      <div class="page-heading notes-heading">
-        <button class="secondary-button icon-action" id="back-to-courses" type="button" aria-label="بازگشت"><img src="assets/icons/back.webp" width="24" height="24" alt="" aria-hidden="true"><span>بازگشت</span></button>
-        <div><h1>یادداشت‌ها</h1><small id="notes-course-name"></small></div>
-        <button class="primary-button icon-action" id="add-note-button" type="button" aria-label="افزودن یادداشت"><img src="assets/icons/add.webp" width="24" height="24" alt="" aria-hidden="true"><span>افزودن</span></button>
+      <div class="page-heading course-subpage-heading">
+        <div class="course-subpage-title"><h1>یادداشت‌ها</h1><small id="notes-course-name"></small></div>
+        <button class="primary-button icon-action" id="add-note-button" type="button" aria-label="افزودن یادداشت"><img src="assets/icons/add.webp" width="24" height="24" alt="" aria-hidden="true"><span>افزودن یادداشت</span></button>
       </div>
-      <div id="notes-list" class="notes-list"></div>
+      <div id="notes-list" class="collection-list"></div>
       <div id="notes-empty" class="empty-state" hidden><p>یادداشتی ثبت نشده.</p></div>
+    </section>
+
+    <section class="app-page collection-page" id="page-course-links" data-page-panel="course-links" hidden>
+      <div class="page-heading course-subpage-heading">
+        <div class="course-subpage-title"><h1>لینک‌ها</h1><small id="course-links-course-name"></small></div>
+        <button class="primary-button icon-action" id="add-course-link-button" type="button" aria-label="افزودن لینک"><img src="assets/icons/add.webp" width="24" height="24" alt="" aria-hidden="true"><span>افزودن لینک</span></button>
+      </div>
+      <div id="course-link-list" class="collection-list"></div>
+      <div id="course-links-empty" class="empty-state" hidden><p>لینکی برای این درس ثبت نشده است.</p></div>
+    </section>
+
+    <section class="app-page collection-page" id="page-course-schedule" data-page-panel="course-schedule" hidden>
+      <div class="page-heading course-subpage-heading">
+        <div class="course-subpage-title"><h1>زمان‌های برگزاری</h1><small id="course-schedule-course-name"></small></div>
+        <button class="primary-button icon-action" id="add-schedule-entry-button" type="button" aria-label="افزودن زمان"><img src="assets/icons/add.webp" width="24" height="24" alt="" aria-hidden="true"><span>افزودن زمان</span></button>
+      </div>
+      <div id="course-schedule-list" class="collection-list"></div>
+      <div id="course-schedule-empty" class="empty-state" hidden><p>زمانی برای این درس ثبت نشده است.</p></div>
     </section>
 
     <section class="app-page settings-page" id="page-settings" data-page-panel="settings" hidden>
@@ -94,7 +111,7 @@
     <button class="menu-action page-link active" type="button" data-page="dashboard">برنامه</button>
     <button class="menu-action page-link" type="button" data-page="courses">مدیریت درس‌ها</button>
     <button class="menu-action page-link" type="button" data-page="settings">تنظیمات</button>
-    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">1.15.6</span></footer>
+    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">1.15.3</span></footer>
   </dialog>
   <dialog id="date-picker-dialog" class="date-picker-dialog" aria-labelledby="calendar-title">
     <div class="dialog-heading"><h2 id="calendar-title">انتخاب تاریخ</h2><button type="button" class="icon-button close-calendar" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>
@@ -126,22 +143,21 @@
   </dialog>
   <dialog id="schedule-dialog" class="editor-dialog schedule-dialog">
     <form id="schedule-form">
-      <div class="dialog-heading"><h2>روز و ساعت برگزاری</h2><button type="button" class="icon-button close-schedule" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>
+      <div class="dialog-heading"><h2 id="schedule-dialog-title">افزودن زمان</h2><button type="button" class="icon-button close-schedule" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>
       <label class="field-label">نوع هفته<select id="schedule-week"><option value="0">هفتهٔ فرد</option><option value="1">هفتهٔ زوج</option><option value="both">هر دو هفته</option></select></label>
       <label class="field-label">روز هفته<select id="schedule-day"></select></label>
       <div class="field-row"><label class="field-label">از ساعت<input id="schedule-start" type="time"></label><label class="field-label">تا ساعت<input id="schedule-end" type="time"></label></div>
-      <button type="button" class="secondary-button icon-action schedule-add" id="add-schedule-entry"><img src="assets/icons/add.webp" width="24" height="24" alt="" aria-hidden="true"><span>افزودن زمان</span></button>
       <p id="schedule-error" class="form-error" role="alert" hidden></p>
-      <div id="schedule-entry-list" class="schedule-entry-list"></div>
       <div class="dialog-actions"><button type="button" class="secondary-button cancel-schedule">لغو</button><button type="submit" class="primary-button icon-action"><img src="assets/icons/check.svg" width="24" height="24" alt="" aria-hidden="true"><span>ذخیره</span></button></div>
     </form>
   </dialog>
-  <dialog id="course-links-dialog" class="editor-dialog links-dialog">
-    <form id="course-links-form">
-      <div class="dialog-heading"><h2>لینک‌های کلاس</h2><button type="button" class="icon-button close-course-links" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>
-      <div class="course-links-section"><div class="course-links-heading"><strong>لینک‌ها</strong><button class="secondary-button icon-action course-link-add" id="add-course-link-button" type="button"><img src="assets/icons/add.webp" width="24" height="24" alt="" aria-hidden="true"><span>افزودن لینک</span></button></div><div id="course-links-list" class="course-links-list"></div></div>
-      <p id="course-links-error" class="form-error" role="alert" hidden></p>
-      <div class="dialog-actions"><button type="button" class="secondary-button cancel-course-links">لغو</button><button type="submit" class="primary-button icon-action"><img src="assets/icons/check.svg" width="24" height="24" alt="" aria-hidden="true"><span>ذخیره</span></button></div>
+  <dialog id="course-link-dialog" class="editor-dialog">
+    <form id="course-link-form" novalidate>
+      <div class="dialog-heading"><h2 id="course-link-dialog-title">افزودن لینک</h2><button type="button" class="icon-button close-course-link" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>
+      <label class="field-label">عنوان لینک<input id="course-link-title" type="text" maxlength="80"></label>
+      <label class="field-label">نشانی لینک<input id="course-link-url" type="text" inputmode="url" dir="ltr" maxlength="300" placeholder="https://..."></label>
+      <p id="course-link-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" class="secondary-button cancel-course-link">لغو</button><button type="submit" class="primary-button icon-action"><img src="assets/icons/check.svg" width="24" height="24" alt="" aria-hidden="true"><span>ذخیره</span></button></div>
     </form>
   </dialog>
   <dialog id="note-dialog" class="course-dialog note-dialog">

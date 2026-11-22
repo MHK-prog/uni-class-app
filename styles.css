@@ -311,3 +311,25 @@ button:active{transform:scale(.96)}
 .settings-actions>.menu-action{width:100%;justify-content:flex-start}
 @media(max-width:370px){.day-context{gap:4px}.day-capsule{padding-inline:2px}.day-capsule small{font-size:9px}.day-capsule strong{font-size:11px}.day-switch{grid-template-columns:40px minmax(0,1fr) minmax(0,1fr) 40px;gap:4px}.day-step{width:40px}.details-row{grid-template-columns:82px minmax(0,1fr)}}
 @media(prefers-reduced-motion:reduce){button,.course-details-dialog,.editor-dialog,.date-picker-dialog,.note-dialog,.course-details-dialog::backdrop,.editor-dialog::backdrop,.date-picker-dialog::backdrop,.note-dialog::backdrop{transition:none!important;animation:none!important}}
+
+/* Shared compact lists for course notes, links and meeting times. */
+.editable-card{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto;min-height:60px;padding:8px 10px;gap:0 8px}
+.editable-card .course-info{grid-column:1;grid-row:1}
+.editable-card .card-actions{grid-column:2;grid-row:1}
+.course-subpage-heading{align-items:center;min-height:66px}
+.course-subpage-title{min-width:0}
+.course-subpage-title h1{margin:0;font-size:19px}
+.course-subpage-title small{display:block;max-width:42vw;margin-top:3px;overflow:hidden;color:var(--muted);font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+.course-subpage-heading .primary-button{flex:none;min-height:46px;padding-inline:12px}
+.collection-list{display:grid;gap:9px}
+.collection-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;min-height:66px;padding:8px 10px;border:1px solid var(--line);border-radius:13px;background:var(--panel);color:var(--text)}
+.collection-card-content{grid-column:1;grid-row:1;min-width:0}
+.collection-card-content h3{margin:0;font-size:15px;line-height:1.5;overflow-wrap:anywhere}
+.collection-card-subtitle{margin:3px 0 0;color:var(--muted);font-size:12px;direction:ltr;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.collection-card-actions{grid-column:2;grid-row:1;display:flex;align-items:center;gap:5px}
+.link-list-card{cursor:pointer;touch-action:pan-y}
+.link-list-card:active{border-color:var(--purple);background:#211a2e}
+.link-list-card:focus-visible{outline:2px solid var(--purple);outline-offset:2px}
+.schedule-list-card .collection-card-content h3{font-variant-numeric:tabular-nums}
+.note-list-card{min-height:60px}
+@media(max-width:370px){.course-subpage-title h1{font-size:17px}.course-subpage-heading .primary-button{padding-inline:8px;font-size:13px}.collection-card{gap:7px;padding:7px 8px}.collection-card-content h3{font-size:14px}}

@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.15.6';
+const APP_VERSION = '1.15.3';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -18,7 +18,6 @@ const $ = selector => document.querySelector(selector);
 let state = loadState();
 let selectedDateISO = targetDay(0).iso;
 let selectedDateMode = 'today';
-let selectedScheduleByWeek = [[], []];
 let toastTimer;
 let activeDetailsCourseId = '';
 let activeDetailsReturnPage = 'dashboard';
@@ -26,6 +25,10 @@ let activeCourseDraft = null;
 let notesReturnPage = 'dashboard';
 let activeCourseField = '';
 let activeNotesCourseId = '';
+let activeCourseSubpageCourseId = '';
+let activeCourseSubpageReturnPage = 'dashboard';
+let activeScheduleEntryEdit = null;
+let activeCourseLinkId = '';
 let activeModalCount = 0;
 let lockedScrollY = 0;
 let drawerCloseTimer;
@@ -382,8 +385,6 @@ function render(now = new Date()) {
 function createCourseCard(course, status, editable = false, schedule = null) {
   const article = document.createElement('article');
   article.className = `course-card status-${status} ${status === 'incomplete' ? 'incomplete' : ''} ${editable ? 'editable-card' : ''}`;
-  const time = document.createElement('div'); time.className = 'course-time';
-  time.textContent = editable ? formatCourseSchedule(course, true) : scheduleEntryIsComplete(schedule) ? `${displayTime(schedule.start)} – ${displayTime(schedule.end)}` : '—';
   const info = document.createElement('div'); info.className = 'course-info';
   const title = document.createElement('h3'); title.textContent = course.title; info.append(title);
   if (editable) {
@@ -391,8 +392,10 @@ function createCourseCard(course, status, editable = false, schedule = null) {
     const details = document.createElement('button'); details.type = 'button'; details.className = 'details-button secondary-button'; details.textContent = '⋮'; details.setAttribute('aria-label', `جزئیات ${course.title}`); details.title = 'جزئیات'; details.addEventListener('click', () => openCourseDetails(course, activePageName()));
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'card-action delete-course-card'; remove.setAttribute('aria-label', `حذف ${course.title}`); remove.title = 'حذف درس';
     const icon = document.createElement('img'); icon.src = 'assets/icons/delete.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true'); remove.append(icon); remove.addEventListener('click', () => removeCourse(course.id));
-    actions.append(details, remove); article.append(time, info, actions);
+    actions.append(details, remove); article.append(info, actions);
   } else {
+    const time = document.createElement('div'); time.className = 'course-time';
+    time.textContent = scheduleEntryIsComplete(schedule) ? `${displayTime(schedule.start)} – ${displayTime(schedule.end)}` : '—';
     article.tabIndex = 0;
     article.setAttribute('role', 'button');
     article.setAttribute('aria-label', course.title);
@@ -416,50 +419,207 @@ function createCourseCard(course, status, editable = false, schedule = null) {
   return article;
 }
 
-function createCourseLinkRow(link = {}) {
-  const row = document.createElement('div'); row.className = 'course-link-row';
-  row.dataset.linkId = String(link.id || makeId('link'));
-  const titleLabel = document.createElement('label'); titleLabel.className = 'field-label';
-  titleLabel.append(document.createTextNode('عنوان لینک'));
-  const titleInput = document.createElement('input'); titleInput.type = 'text'; titleInput.className = 'course-link-title';
-  titleInput.maxLength = 80; titleInput.placeholder = 'مثلاً کانال استاد'; titleInput.value = link.title || '';
-  titleLabel.append(titleInput);
-  const urlLabel = document.createElement('label'); urlLabel.className = 'field-label';
-  urlLabel.append(document.createTextNode('نشانی لینک'));
-  const urlInput = document.createElement('input'); urlInput.type = 'url'; urlInput.inputMode = 'url';
-  urlInput.className = 'course-link-url'; urlInput.maxLength = 300; urlInput.placeholder = 'https://...'; urlInput.value = link.url || '';
-  urlLabel.append(urlInput);
-  const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary-button icon-action course-link-remove';
-  remove.setAttribute('aria-label', 'حذف لینک');
-  const icon = document.createElement('img'); icon.src = 'assets/icons/delete.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true');
-  const text = document.createElement('span'); text.textContent = 'حذف لینک';
-  remove.append(icon, text); remove.addEventListener('click', () => row.remove());
-  row.append(titleLabel, urlLabel, remove);
-  return row;
-}
-
-function renderCourseLinkRows(links = []) {
-  const container = $('#course-links-list');
-  container.replaceChildren(...normalizeCourseLinks(links).map(createCourseLinkRow));
-}
-
-function collectCourseLinks() {
-  const links = [];
-  for (const row of $('#course-links-list').querySelectorAll('.course-link-row')) {
-    const title = toFaDigits(row.querySelector('.course-link-title').value.trim());
-    const rawUrl = row.querySelector('.course-link-url').value.trim();
-    if (!title && !rawUrl) continue;
-    if (!title) return { links: null, error: 'برای هر لینک، عنوان آن را وارد کنید.' };
-    if (!rawUrl) return { links: null, error: 'نشانی لینک را وارد کنید.' };
-    const url = normalizeChannelUrl(rawUrl);
-    if (!url) return { links: null, error: 'نشانی لینک معتبر نیست.' };
-    links.push({ id: row.dataset.linkId || makeId('link'), title, url });
-  }
-  return { links, error: '' };
-}
-
 function activePageName() {
   return document.querySelector('[data-page-panel]:not([hidden])')?.dataset.pagePanel || 'dashboard';
+}
+
+function activeCourseSubpageCourse() {
+  return state.courses.find(course => course.id === activeCourseSubpageCourseId)
+    || (activeCourseDraft?.id === activeCourseSubpageCourseId ? activeCourseDraft : null);
+}
+
+function createCollectionCard({ title, subtitle = '', className = '', editLabel, deleteLabel, onEdit, onDelete, onOpen }) {
+  const card = document.createElement('article');
+  card.className = `collection-card ${className}`;
+  const content = document.createElement('div'); content.className = 'collection-card-content';
+  const heading = document.createElement('h3'); heading.textContent = title; content.append(heading);
+  if (subtitle) { const detail = document.createElement('p'); detail.className = 'collection-card-subtitle'; detail.textContent = subtitle; content.append(detail); }
+  const actions = document.createElement('div'); actions.className = 'collection-card-actions';
+  const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'details-button secondary-button';
+  edit.textContent = '⋮'; edit.title = editLabel; edit.setAttribute('aria-label', `${editLabel}: ${title}`);
+  edit.addEventListener('click', event => { event.stopPropagation(); onEdit?.(); });
+  const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'card-action delete-course-card';
+  remove.title = deleteLabel; remove.setAttribute('aria-label', `${deleteLabel}: ${title}`);
+  const icon = document.createElement('img'); icon.src = 'assets/icons/delete.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true');
+  remove.append(icon); remove.addEventListener('click', event => { event.stopPropagation(); onDelete?.(); });
+  actions.append(edit, remove); card.append(content, actions);
+
+  if (onOpen) {
+    card.tabIndex = 0; card.setAttribute('role', 'link'); card.setAttribute('aria-label', `${title}، باز کردن لینک`);
+    let pointerStart = null, suppressClick = false;
+    card.addEventListener('pointerdown', event => {
+      if (event.target.closest('button')) { pointerStart = null; suppressClick = false; return; }
+      pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+      suppressClick = false;
+    }, { passive: true });
+    card.addEventListener('pointermove', event => {
+      if (!pointerStart || pointerStart.id !== event.pointerId) return;
+      if (Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 10) pointerStart.moved = true;
+    }, { passive: true });
+    const finishPointer = event => {
+      if (!pointerStart || pointerStart.id !== event.pointerId) return;
+      suppressClick = pointerStart.moved; pointerStart = null;
+      if (suppressClick) setTimeout(() => { suppressClick = false; }, 350);
+    };
+    card.addEventListener('pointerup', finishPointer, { passive: true });
+    card.addEventListener('pointercancel', finishPointer, { passive: true });
+    card.addEventListener('click', event => {
+      if (event.target.closest('button')) return;
+      if (suppressClick) { event.preventDefault(); suppressClick = false; return; }
+      onOpen();
+    });
+    card.addEventListener('keydown', event => {
+      if (event.target !== card || !['Enter', ' '].includes(event.key)) return;
+      event.preventDefault(); onOpen();
+    });
+  }
+  return card;
+}
+
+function openExternalLink(url) {
+  if (window.AndroidScheduleBridge?.openExternalUrl) {
+    window.AndroidScheduleBridge.openExternalUrl(url);
+    return;
+  }
+  const link = document.createElement('a');
+  link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+  document.body.append(link); link.click(); link.remove();
+}
+
+function openCourseSubpage(course, page) {
+  if (!course) return;
+  activeCourseSubpageCourseId = course.id;
+  activeCourseSubpageReturnPage = activeDetailsReturnPage;
+  if (page === 'course-links') renderCourseLinksPage();
+  else renderCourseSchedulePage();
+  if ($('#course-details-dialog').open) $('#course-details-dialog').close();
+  switchPage(page);
+}
+
+function openCourseLinksPage(course) { openCourseSubpage(course, 'course-links'); }
+
+function renderCourseLinksPage() {
+  const course = activeCourseSubpageCourse();
+  const list = $('#course-link-list');
+  if (!course) { list.replaceChildren(); $('#course-links-empty').hidden = false; return; }
+  $('#course-links-course-name').textContent = course.title;
+  const links = normalizeCourseLinks(course.links, course.teacherChannel);
+  list.replaceChildren(...links.map(link => {
+    let host = link.url;
+    try { host = new URL(link.url).hostname; } catch (error) {}
+    return createCollectionCard({
+      title: link.title, subtitle: host, className: 'link-list-card',
+      editLabel: 'ویرایش لینک', deleteLabel: 'حذف لینک',
+      onEdit: () => openCourseLinkEditor(link),
+      onDelete: () => removeCourseLink(link.id),
+      onOpen: () => openExternalLink(link.url)
+    });
+  }));
+  $('#course-links-empty').hidden = links.length !== 0;
+}
+
+function openCourseLinkEditor(link = null) {
+  if (!activeCourseSubpageCourse()) return;
+  activeCourseLinkId = link?.id || '';
+  $('#course-link-dialog-title').textContent = link ? 'ویرایش لینک' : 'افزودن لینک';
+  $('#course-link-title').value = link?.title || '';
+  $('#course-link-url').value = link?.url || '';
+  $('#course-link-error').hidden = true;
+  showAppModal($('#course-link-dialog'));
+  $('#course-link-title').focus();
+}
+
+function persistCourseSubpageCourse(message) {
+  const course = activeCourseSubpageCourse();
+  if (!course) return;
+  const index = state.courses.findIndex(item => item.id === course.id);
+  if (index < 0) return;
+  state.courses[index] = course;
+  saveState(); render(); renderCourseLinksPage(); renderCourseSchedulePage(); refreshCourseDetails();
+  if (message) showToast(message);
+}
+
+function removeCourseLink(linkId) {
+  const course = activeCourseSubpageCourse();
+  const link = course && normalizeCourseLinks(course.links, course.teacherChannel).find(item => item.id === linkId);
+  if (!course || !link || !window.confirm(`لینک «${link.title}» حذف شود؟`)) return;
+  course.links = normalizeCourseLinks(course.links, course.teacherChannel).filter(item => item.id !== linkId);
+  persistCourseSubpageCourse('لینک حذف شد.');
+}
+
+function openCourseSchedulePage(course) { openCourseSubpage(course, 'course-schedule'); }
+
+function renderCourseSchedulePage() {
+  const course = activeCourseSubpageCourse();
+  const list = $('#course-schedule-list');
+  if (!course) { list.replaceChildren(); $('#course-schedule-empty').hidden = false; return; }
+  $('#course-schedule-course-name').textContent = course.title;
+  const entries = [0, 1].flatMap(weekIndex => (course.scheduleByWeek?.[weekIndex] || []).map(entry => ({ ...entry, weekIndex })))
+    .sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day)
+      || a.start.localeCompare(b.start) || a.weekIndex - b.weekIndex);
+  list.replaceChildren(...entries.map(entry => {
+    const key = scheduleEntryKey(entry);
+    const time = scheduleEntryIsComplete(entry) ? `${displayTime(entry.start)} تا ${displayTime(entry.end)}` : 'ساعت ثبت نشده';
+    return createCollectionCard({
+      title: `${entry.day}، ${time}`, subtitle: parityLabel(entry.weekIndex), className: 'schedule-list-card',
+      editLabel: 'ویرایش زمان', deleteLabel: 'حذف زمان',
+      onEdit: () => openScheduleEntryEditor(entry.weekIndex, entry),
+      onDelete: () => removeScheduleEntry(entry.weekIndex, key)
+    });
+  }));
+  $('#course-schedule-empty').hidden = entries.length !== 0;
+}
+
+function scheduleEntryKey(entry) { return `${entry.day}|${entry.start}|${entry.end}`; }
+
+function openScheduleEntryEditor(weekIndex = null, entry = null) {
+  if (!activeCourseSubpageCourse()) return;
+  activeScheduleEntryEdit = entry ? { weekIndex, key: scheduleEntryKey(entry) } : null;
+  $('#schedule-dialog-title').textContent = entry ? 'ویرایش زمان' : 'افزودن زمان';
+  $('#schedule-week').value = entry ? String(weekIndex) : '0';
+  $('#schedule-day').value = entry?.day || WEEK_DAY_ORDER[0];
+  $('#schedule-start').value = entry?.start || '';
+  $('#schedule-end').value = entry?.end || '';
+  $('#schedule-error').hidden = true;
+  showAppModal($('#schedule-dialog'));
+}
+
+function saveScheduleEntry(event) {
+  event.preventDefault();
+  const course = activeCourseSubpageCourse();
+  if (!course) return;
+  const day = $('#schedule-day').value, start = $('#schedule-start').value, end = $('#schedule-end').value;
+  if (!validTime(start) || !validTime(end) || start >= end) {
+    $('#schedule-error').textContent = 'ساعت شروع و پایان معتبر را وارد کنید.'; $('#schedule-error').hidden = false; return;
+  }
+  if (activeScheduleEntryEdit) {
+    const oldEntries = course.scheduleByWeek[activeScheduleEntryEdit.weekIndex];
+    const oldIndex = oldEntries.findIndex(entry => scheduleEntryKey(entry) === activeScheduleEntryEdit.key);
+    if (oldIndex >= 0) oldEntries.splice(oldIndex, 1);
+  }
+  const weekValue = $('#schedule-week').value;
+  const weeks = weekValue === 'both' ? [0, 1] : [Number(weekValue)];
+  weeks.forEach(weekIndex => {
+    const entry = { day, start, end };
+    if (!course.scheduleByWeek[weekIndex].some(item => scheduleEntryKey(item) === scheduleEntryKey(entry))) {
+      course.scheduleByWeek[weekIndex].push(entry);
+    }
+    course.scheduleByWeek[weekIndex].sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day) || a.start.localeCompare(b.start));
+  });
+  const wasEditing = Boolean(activeScheduleEntryEdit);
+  $('#schedule-dialog').close();
+  persistCourseSubpageCourse(wasEditing ? 'زمان ویرایش شد.' : 'زمان اضافه شد.');
+}
+
+function removeScheduleEntry(weekIndex, key) {
+  const course = activeCourseSubpageCourse();
+  const entry = course?.scheduleByWeek?.[weekIndex]?.find(item => scheduleEntryKey(item) === key);
+  const time = entry && scheduleEntryIsComplete(entry) ? `${displayTime(entry.start)} تا ${displayTime(entry.end)}` : 'زمان ثبت‌نشده';
+  if (!course || !entry || !window.confirm(`${entry.day}، ${time}، ${parityLabel(weekIndex)} حذف شود؟`)) return;
+  const entries = course.scheduleByWeek[weekIndex];
+  const index = entries.findIndex(item => scheduleEntryKey(item) === key);
+  if (index >= 0) entries.splice(index, 1);
+  persistCourseSubpageCourse('زمان حذف شد.');
 }
 
 function activeDetailsCourse() {
@@ -520,64 +680,6 @@ function persistActiveDetailsCourse(message = 'تغییرات ذخیره شد.')
   }
   saveState(); render(); refreshCourseDetails();
   if (message) showToast(message);
-}
-
-function openScheduleEditor() {
-  const course = activeDetailsCourse();
-  if (!course) return;
-  selectedScheduleByWeek = course.scheduleByWeek.map(entries => entries.map(entry => ({ ...entry })));
-  $('#schedule-week').value = '0'; $('#schedule-start').value = ''; $('#schedule-end').value = '';
-  $('#schedule-error').hidden = true;
-  renderScheduleEntryList();
-  showAppModal($('#schedule-dialog'));
-}
-
-function renderScheduleEntryList() {
-  const grouped = new Map();
-  selectedScheduleByWeek.forEach((entries, weekIndex) => entries.forEach(entry => {
-    const key = `${entry.day}|${entry.start}|${entry.end}`;
-    if (!grouped.has(key)) grouped.set(key, { ...entry, key, weeks: [] });
-    grouped.get(key).weeks.push(weekIndex);
-  }));
-  const sessions = [...grouped.values()];
-  sessions.sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day) || a.start.localeCompare(b.start));
-  const list = $('#schedule-entry-list');
-  if (!sessions.length) {
-    const empty = document.createElement('p'); empty.className = 'schedule-entry-empty'; empty.textContent = 'هنوز زمانی برای این درس ثبت نشده است.';
-    list.replaceChildren(empty); return;
-  }
-  list.replaceChildren(...sessions.map(session => {
-    const row = document.createElement('div'); row.className = 'schedule-entry';
-    const text = document.createElement('span');
-    const weekLabel = session.weeks.length === 2 ? 'هر دو هفته' : parityLabel(session.weeks[0]);
-    text.textContent = `${weekLabel}، ${session.day}، ${session.start && session.end ? `${displayTime(session.start)} تا ${displayTime(session.end)}` : 'ساعت ثبت نشده'}`;
-    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary-button icon-action schedule-entry-remove'; remove.setAttribute('aria-label', 'حذف زمان');
-    const icon = document.createElement('img'); icon.src = 'assets/icons/delete.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true'); remove.append(icon);
-    remove.addEventListener('click', () => {
-      session.weeks.forEach(weekIndex => {
-        const entryIndex = selectedScheduleByWeek[weekIndex].findIndex(entry => `${entry.day}|${entry.start}|${entry.end}` === session.key);
-        if (entryIndex >= 0) selectedScheduleByWeek[weekIndex].splice(entryIndex, 1);
-      });
-      renderScheduleEntryList();
-    });
-    row.append(text, remove); return row;
-  }));
-}
-
-function addScheduleEntry() {
-  const error = $('#schedule-error');
-  const day = $('#schedule-day').value, start = $('#schedule-start').value, end = $('#schedule-end').value;
-  if (!validTime(start) || !validTime(end) || start >= end) {
-    error.textContent = 'ساعت شروع و پایان معتبر را وارد کنید.'; error.hidden = false; return;
-  }
-  const weeks = $('#schedule-week').value === 'both' ? [0, 1] : [Number($('#schedule-week').value)];
-  weeks.forEach(weekIndex => {
-    const exists = selectedScheduleByWeek[weekIndex].some(entry => entry.day === day && entry.start === start && entry.end === end);
-    if (!exists) selectedScheduleByWeek[weekIndex].push({ day, start, end });
-    selectedScheduleByWeek[weekIndex].sort((a, b) => WEEK_DAY_ORDER.indexOf(a.day) - WEEK_DAY_ORDER.indexOf(b.day) || a.start.localeCompare(b.start));
-  });
-  $('#schedule-start').value = ''; $('#schedule-end').value = ''; error.hidden = true;
-  renderScheduleEntryList();
 }
 
 function showAppModal(dialog) {
@@ -690,13 +792,22 @@ function switchPage(destination) {
   }
 }
 
+function returnToCourseDetails() {
+  const course = activeCourseSubpageCourse();
+  const returnPage = activeCourseSubpageReturnPage || 'dashboard';
+  switchPage(returnPage);
+  if (course) openCourseDetails(course, returnPage);
+  return Boolean(course);
+}
+
 function handleAppBack() {
   const drawer = $('#menu-drawer'), drawerWasOpen = drawer.open;
-  if (drawerWasOpen) closeMenuDrawer();
+  if (drawerWasOpen) { closeMenuDrawer(); return true; }
   const activeDialog = [...document.querySelectorAll('dialog')].filter(dialog => dialog.open && dialog.id !== 'menu-drawer').at(-1);
   if (activeDialog) { activeDialog.close(); return true; }
   const activePage = document.querySelector('[data-page-panel]:not([hidden])')?.dataset.pagePanel || 'dashboard';
   if (activePage === 'notes') switchPage(notesReturnPage);
+  else if (activePage === 'course-links' || activePage === 'course-schedule') returnToCourseDetails();
   else if (activePage !== 'dashboard') switchPage('dashboard');
   return drawerWasOpen || activePage !== 'dashboard';
 }
@@ -716,19 +827,10 @@ function renderNotesPage() {
   if (!course) { switchPage(notesReturnPage || 'dashboard'); return; }
   $('#notes-course-name').textContent = course.title;
   const list = $('#notes-list');
-  list.replaceChildren(...course.notes.map(note => {
-    const article = document.createElement('article'); article.className = 'note-card';
-    const heading = document.createElement('h2'); heading.textContent = note.title;
-    const body = document.createElement('p'); body.textContent = note.text || '—';
-    const actions = document.createElement('div'); actions.className = 'note-actions';
-    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'secondary-button icon-action'; edit.title = 'ویرایش یادداشت'; edit.setAttribute('aria-label', `ویرایش یادداشت ${note.title}`);
-    const editIcon = document.createElement('img'); editIcon.className = 'button-icon'; editIcon.src = 'assets/icons/edit.webp'; editIcon.alt = ''; editIcon.setAttribute('aria-hidden', 'true');
-    edit.append(editIcon, 'ویرایش'); edit.addEventListener('click', () => openNoteDialog(note));
-    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary-button icon-action note-delete'; remove.title = 'حذف یادداشت'; remove.setAttribute('aria-label', `حذف یادداشت ${note.title}`);
-    const removeIcon = document.createElement('img'); removeIcon.src = 'assets/icons/delete.webp'; removeIcon.alt = ''; removeIcon.setAttribute('aria-hidden', 'true');
-    remove.append(removeIcon, 'حذف'); remove.addEventListener('click', () => removeNote(note.id));
-    actions.append(edit, remove); article.append(heading, body, actions); return article;
-  }));
+  list.replaceChildren(...course.notes.map(note => createCollectionCard({
+    title: note.title, className: 'note-list-card', editLabel: 'ویرایش یادداشت', deleteLabel: 'حذف یادداشت',
+    onEdit: () => openNoteDialog(note), onDelete: () => removeNote(note.id)
+  })));
   $('#notes-empty').hidden = course.notes.length !== 0;
 }
 
@@ -756,6 +858,7 @@ function removeCourse(id) {
   state.courses = state.courses.filter(item => item.id !== id); saveState();
   if ($('#course-details-dialog').open && activeDetailsCourseId === id) $('#course-details-dialog').close();
   if (activeNotesCourseId === id) switchPage(notesReturnPage || 'dashboard');
+  if (activeCourseSubpageCourseId === id) { activeCourseSubpageCourseId = ''; switchPage(activeCourseSubpageReturnPage || 'dashboard'); }
   render(); showToast('درس حذف شد.');
 }
 
@@ -1383,13 +1486,9 @@ function init() {
   $('#course-details-dialog').addEventListener('click', event => {
     const row = event.target.closest('[data-course-editor], [data-course-field]');
     if (!row) return;
-    if (row.dataset.courseEditor === 'schedule') openScheduleEditor();
-    else if (row.dataset.courseEditor === 'links') {
-      const course = activeDetailsCourse();
-      renderCourseLinkRows(course ? normalizeCourseLinks(course.links, course.teacherChannel) : []);
-      $('#course-links-error').hidden = true;
-      showAppModal($('#course-links-dialog'));
-    } else openCourseFieldEditor(row.dataset.courseField);
+    if (row.dataset.courseEditor === 'schedule') openCourseSchedulePage(activeDetailsCourse());
+    else if (row.dataset.courseEditor === 'links') openCourseLinksPage(activeDetailsCourse());
+    else openCourseFieldEditor(row.dataset.courseField);
   });
   $('#course-notes-button').addEventListener('click', () => openNotesPage(activeDetailsCourseId, activeDetailsReturnPage));
   $('.close-course-field').addEventListener('click', () => $('#course-field-dialog').close());
@@ -1413,43 +1512,32 @@ function init() {
   });
   $('.close-schedule').addEventListener('click', () => $('#schedule-dialog').close());
   $('.cancel-schedule').addEventListener('click', () => $('#schedule-dialog').close());
-  $('#schedule-week').addEventListener('change', renderScheduleEntryList);
-  $('#add-schedule-entry').addEventListener('click', addScheduleEntry);
-  $('#schedule-form').addEventListener('submit', event => {
-    event.preventDefault();
-    const course = activeDetailsCourse();
-    if (!course) return;
-    if ($('#schedule-start').value || $('#schedule-end').value) {
-      addScheduleEntry();
-      if (!$('#schedule-error').hidden) return;
-    }
-    course.scheduleByWeek = selectedScheduleByWeek.map(entries => entries.map(entry => ({ ...entry })));
-    $('#schedule-dialog').close();
-    persistActiveDetailsCourse('ساعت‌های برگزاری ذخیره شد.');
-  });
-  $('.close-course-links').addEventListener('click', () => $('#course-links-dialog').close());
-  $('.cancel-course-links').addEventListener('click', () => $('#course-links-dialog').close());
-  $('#add-course-link-button').addEventListener('click', () => {
-    const row = createCourseLinkRow();
-    $('#course-links-list').append(row);
-    row.querySelector('.course-link-title').focus();
-  });
-  $('#course-links-list').addEventListener('input', event => {
-    if (!event.target.matches('.course-link-title')) return;
+  $('#schedule-form').addEventListener('submit', saveScheduleEntry);
+  $('#add-schedule-entry-button').addEventListener('click', () => openScheduleEntryEditor());
+  $('.close-course-link').addEventListener('click', () => $('#course-link-dialog').close());
+  $('.cancel-course-link').addEventListener('click', () => $('#course-link-dialog').close());
+  $('#add-course-link-button').addEventListener('click', () => openCourseLinkEditor());
+  $('#course-link-title').addEventListener('input', event => {
     const start = event.target.selectionStart, end = event.target.selectionEnd;
     const converted = toFaDigits(event.target.value);
     if (converted !== event.target.value) { event.target.value = converted; event.target.setSelectionRange(start, end); }
   });
-  $('#course-links-form').addEventListener('submit', event => {
+  $('#course-link-form').addEventListener('submit', event => {
     event.preventDefault();
-    const course = activeDetailsCourse(), result = collectCourseLinks();
+    const course = activeCourseSubpageCourse();
     if (!course) return;
-    if (!result.links) { $('#course-links-error').textContent = result.error; $('#course-links-error').hidden = false; return; }
-    course.links = result.links;
-    $('#course-links-dialog').close();
-    persistActiveDetailsCourse('لینک‌های کلاس ذخیره شد.');
+    const title = toFaDigits($('#course-link-title').value.trim());
+    const url = normalizeChannelUrl($('#course-link-url').value.trim());
+    const error = $('#course-link-error');
+    if (!title) { error.textContent = 'عنوان لینک را وارد کنید.'; error.hidden = false; return; }
+    if (!url) { error.textContent = 'نشانی معتبر لینک را وارد کنید.'; error.hidden = false; return; }
+    course.links = normalizeCourseLinks(course.links, course.teacherChannel);
+    const link = { id: activeCourseLinkId || makeId('link'), title, url };
+    const index = course.links.findIndex(item => item.id === link.id);
+    if (index >= 0) course.links[index] = link; else course.links.push(link);
+    $('#course-link-dialog').close();
+    persistCourseSubpageCourse(index >= 0 ? 'لینک ویرایش شد.' : 'لینک اضافه شد.');
   });
-  $('#back-to-courses').addEventListener('click', () => switchPage(notesReturnPage));
   $('#add-note-button').addEventListener('click', () => openNoteDialog());
   $('.close-note').addEventListener('click', () => $('#note-dialog').close());
   $('.cancel-note').addEventListener('click', () => $('#note-dialog').close());

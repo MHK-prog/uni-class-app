@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.15.3';
+const APP_VERSION = '1.15.7';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -14,6 +14,7 @@ const jalaliDateFormatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { time
 const jalaliShortDateFormatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' });
 const jalaliPartsFormatter = new Intl.DateTimeFormat('en-US-u-ca-persian-nu-latn', { timeZone: 'UTC', year: 'numeric', month: 'numeric', day: 'numeric' });
 const JALALI_MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+const ACCENT_COLORS = ['purple', 'blue', 'teal', 'green', 'orange', 'pink', 'red'];
 const $ = selector => document.querySelector(selector);
 let state = loadState();
 let selectedDateISO = targetDay(0).iso;
@@ -22,6 +23,8 @@ let toastTimer;
 let activeDetailsCourseId = '';
 let activeDetailsReturnPage = 'dashboard';
 let activeCourseDraft = null;
+let activeEventDraft = null;
+let activeEventField = '';
 let notesReturnPage = 'dashboard';
 let activeCourseField = '';
 let activeNotesCourseId = '';
@@ -35,6 +38,8 @@ let drawerCloseTimer;
 let calendarTarget = 'dashboard';
 let calendarDraftISO = '';
 let calendarCursorISO = '';
+let pendingDashboardDate = '';
+let dashboardClickSuppressUntil = 0;
 let pendingAmozeshyarCourses = null;
 let pendingAmozeshyarScheduleChoices = new Map();
 let nativeBackupResolve = null;
@@ -47,14 +52,48 @@ function loadState() {
       const oldParity = previousStartParity(saved.cycle, oldSettings);
       const cycle = normalizeCycle(saved.cycle, oldSettings);
       const courseSettings = { ...oldSettings, anchorDate: cycle.termStartDate, anchorParity: oldParity, hasParity: true };
-      const normalized = { cycle, courses: normalizeCourses(saved.courses, courseSettings, oldParity === 'even') };
+      const normalized = {
+        cycle,
+        courses: normalizeCourses(saved.courses, courseSettings, oldParity === 'even'),
+        events: normalizeEvents(saved.events),
+        preferences: normalizePreferences(saved.preferences)
+      };
       if (saved.cycle?.termStartParity || saved.cycle?.anchorParity || oldSettings.hasParity) {
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized)); } catch (error) { console.warn('Could not migrate saved schedule.', error); }
       }
       return normalized;
     }
   } catch (error) { console.warn('Could not load saved schedule.', error); }
-  return { cycle: { ...DEFAULT_CYCLE }, courses: [] };
+  return { cycle: { ...DEFAULT_CYCLE }, courses: [], events: [], preferences: normalizePreferences() };
+}
+
+function normalizePreferences(input = {}) {
+  return {
+    theme: input?.theme === 'light' ? 'light' : 'dark',
+    accent: ACCENT_COLORS.includes(input?.accent) ? input.accent : 'purple'
+  };
+}
+
+function normalizeEvents(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((raw, index) => ({
+    id: String(raw?.id || makeId(`event-${index}`)),
+    title: toFaDigits(String(raw?.title || '').trim()).slice(0, 100),
+    date: isValidISODate(raw?.date) ? raw.date : '',
+    start: validTime(raw?.start) ? raw.start : '',
+    end: validTime(raw?.end) ? raw.end : '',
+    description: toFaDigits(String(raw?.description || '').trim()).slice(0, 2000)
+  })).filter(item => item.title && item.date);
+}
+
+function applyPreferences() {
+  const preferences = state.preferences = normalizePreferences(state.preferences);
+  document.documentElement.dataset.theme = preferences.theme;
+  document.documentElement.dataset.accent = preferences.accent;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', preferences.theme === 'light' ? '#f3f5f9' : '#09080d');
+  const themePicker = $('#theme-mode'), accentPicker = $('#theme-accent');
+  if (themePicker) themePicker.value = preferences.theme;
+  if (accentPicker) accentPicker.value = preferences.accent;
 }
 
 function normalizeLegacySettings(input = {}) {
@@ -260,12 +299,92 @@ function renderCalendar() {
 
 function openDatePicker(target) {
   calendarTarget = target;
-  calendarDraftISO = target === 'term' ? state.cycle.termStartDate : targetDay(0).iso;
+  calendarDraftISO = target === 'term' ? state.cycle.termStartDate
+    : target === 'event' ? (activeEventDraft?.date || selectedDateISO || targetDay(0).iso)
+      : targetDay(0).iso;
   if (!isValidISODate(calendarDraftISO)) calendarDraftISO = targetDay(0).iso;
   calendarCursorISO = calendarDraftISO;
-  $('#calendar-title').textContent = target === 'term' ? 'تاریخ شروع ترم' : 'انتخاب تاریخ برنامه';
+  $('#calendar-title').textContent = target === 'term' ? 'تاریخ شروع ترم' : target === 'event' ? 'تاریخ رویداد' : 'انتخاب تاریخ برنامه';
   renderCalendar();
   showAppModal($('#date-picker-dialog'));
+}
+
+function openEventEditor(event = null) {
+  activeEventDraft = event ? { ...event } : {
+    id: makeId('event'), title: '', date: selectedDateISO || targetDay(0).iso, start: '', end: '', description: ''
+  };
+  $('#event-dialog-title').textContent = event ? 'ویرایش رویداد' : 'رویداد تازه';
+  $('#event-delete-button').hidden = !event;
+  refreshEventDetails();
+  showAppModal($('#event-dialog'));
+}
+
+function refreshEventDetails() {
+  if (!activeEventDraft) return;
+  const event = activeEventDraft;
+  $('#event-title-value').textContent = event.title || 'برای نوشتن عنوان بزنید';
+  $('#event-date-value').textContent = isValidISODate(event.date)
+    ? jalaliShortDateFormatter.format(new Date(`${event.date}T12:00:00Z`)) : 'انتخاب تاریخ';
+  $('#event-start-value').textContent = validTime(event.start) ? displayTime(event.start) : 'انتخاب ساعت';
+  $('#event-end-value').textContent = validTime(event.end) ? displayTime(event.end) : 'انتخاب ساعت';
+  $('#event-description-value').textContent = event.description || 'برای نوشتن توضیحات بزنید';
+}
+
+function openEventFieldEditor(field) {
+  if (!activeEventDraft) return;
+  activeEventField = field;
+  const title = { title: 'عنوان رویداد', start: 'زمان شروع', end: 'زمان پایان', description: 'توضیحات رویداد' }[field];
+  if (!title) return;
+  const textInput = $('#event-field-value'), textarea = $('#event-field-textarea');
+  $('#event-field-dialog-title').textContent = title;
+  $('#event-field-error').hidden = true;
+  textInput.hidden = field === 'description'; textarea.hidden = field !== 'description';
+  if (field === 'description') textarea.value = activeEventDraft.description || '';
+  else {
+    textInput.type = field === 'start' || field === 'end' ? 'time' : 'text';
+    textInput.maxLength = 100;
+    textInput.value = activeEventDraft[field] || '';
+  }
+  showAppModal($('#event-field-dialog'));
+}
+
+function saveEventField(event) {
+  event.preventDefault();
+  if (!activeEventDraft) return;
+  const value = activeEventField === 'description'
+    ? toFaDigits($('#event-field-textarea').value.trim())
+    : activeEventField === 'start' || activeEventField === 'end'
+      ? $('#event-field-value').value
+      : toFaDigits($('#event-field-value').value.trim());
+  if (activeEventField === 'title' && !value) {
+    $('#event-field-error').textContent = 'عنوان رویداد را وارد کنید.'; $('#event-field-error').hidden = false; return;
+  }
+  activeEventDraft[activeEventField] = value;
+  $('#event-field-dialog').close(); refreshEventDetails();
+}
+
+function saveEvent(event) {
+  event.preventDefault();
+  if (!activeEventDraft) return;
+  activeEventDraft.title = toFaDigits(activeEventDraft.title.trim());
+  if (!activeEventDraft.title) { showToast('عنوان رویداد را وارد کنید.'); return; }
+  if (!isValidISODate(activeEventDraft.date)) { showToast('تاریخ رویداد را انتخاب کنید.'); return; }
+  if (!validTime(activeEventDraft.start) || !validTime(activeEventDraft.end) || activeEventDraft.start >= activeEventDraft.end) {
+    showToast('زمان شروع و پایان را کامل و درست وارد کنید.'); return;
+  }
+  const index = state.events.findIndex(item => item.id === activeEventDraft.id);
+  if (index >= 0) state.events[index] = activeEventDraft;
+  else state.events.push(activeEventDraft);
+  const message = index >= 0 ? 'رویداد ویرایش شد.' : 'رویداد اضافه شد.';
+  activeEventDraft = null; saveState(); $('#event-dialog').close(); render(); showToast(message);
+}
+
+function deleteActiveEvent() {
+  const event = activeEventDraft;
+  if (!event || !state.events.some(item => item.id === event.id)) return;
+  if (!window.confirm(`رویداد «${event.title}» حذف شود؟`)) return;
+  state.events = state.events.filter(item => item.id !== event.id);
+  activeEventDraft = null; saveState(); $('#event-dialog').close(); render(); showToast('رویداد حذف شد.');
 }
 
 function saturdayOnOrBefore(dateString) {
@@ -338,8 +457,9 @@ function syncTermSettings() {
   if (label) label.textContent = jalaliDateFormatter.format(new Date(`${state.cycle.termStartDate}T12:00:00Z`));
 }
 
-function statusFor(schedule, currentMinutes, isToday) {
+function statusFor(schedule, currentMinutes, isToday, isPast = false) {
   if (!scheduleEntryIsComplete(schedule)) return 'incomplete';
+  if (isPast) return 'done';
   if (!isToday) return 'upcoming';
   const [startHour, startMinute] = schedule.start.split(':').map(Number);
   const [endHour, endMinute] = schedule.end.split(':').map(Number);
@@ -351,6 +471,27 @@ function statusFor(schedule, currentMinutes, isToday) {
 function selectedInfo(now = new Date()) {
   const date = dateFromISO(selectedDateISO || targetDay(0, now).iso), current = iranParts(now), today = targetDay(0, now);
   return { ...date, isToday: date.iso === today.iso, currentMinutes: current.hour * 60 + current.minute, weekIndex: cycleWeekIndex(date.iso) };
+}
+
+function dashboardEntries(dateISO, now = new Date()) {
+  const info = dateFromISO(dateISO), todayISO = targetDay(0, now).iso, current = iranParts(now);
+  const classes = state.courses.flatMap(course => (course.scheduleByWeek?.[cycleWeekIndex(dateISO)] || [])
+    .filter(entry => entry.day === info.weekday && scheduleEntryIsComplete(entry))
+    .map(schedule => ({ type: 'course', course, schedule, start: schedule.start, status: statusFor(schedule, current.hour * 60 + current.minute, dateISO === todayISO, dateISO < todayISO) })));
+  const events = state.events.filter(event => event.date === dateISO).map(event => ({
+    type: 'event', event, start: event.start || '99:99',
+    status: event.start && event.end ? statusFor(event, current.hour * 60 + current.minute, dateISO === todayISO, dateISO < todayISO) : dateISO < todayISO ? 'done' : 'upcoming'
+  }));
+  return [...classes, ...events].sort((a, b) => a.start.localeCompare(b.start) || (a.type === 'event' ? a.event.title : a.course.title).localeCompare(b.type === 'event' ? b.event.title : b.course.title, 'fa'));
+}
+
+function renderDashboardPanel(dateISO, element, now = new Date()) {
+  const entries = dashboardEntries(dateISO, now);
+  element.replaceChildren(...entries.map(item => item.type === 'event'
+    ? createEventCard(item.event, item.status)
+    : createCourseCard(item.course, item.status, false, item.schedule)));
+  element.hidden = false;
+  return entries;
 }
 
 function render(now = new Date()) {
@@ -366,23 +507,65 @@ function render(now = new Date()) {
   const dateButton = $('#pick-date-button');
   dateButton.classList.toggle('active', !isToday); dateButton.setAttribute('aria-pressed', String(!isToday));
   $('#drawer-app-version').textContent = toFaDigits(APP_VERSION);
-  const matching = state.courses.flatMap(course => (course.scheduleByWeek?.[info.weekIndex] || [])
-    .filter(entry => entry.day === info.weekday && scheduleEntryIsComplete(entry))
-    .map(schedule => ({ course, schedule })))
-    .sort((a, b) => a.schedule.start.localeCompare(b.schedule.start) || a.schedule.end.localeCompare(b.schedule.end));
-  const rendered = matching.map(item => ({ ...item, status: statusFor(item.schedule, info.currentMinutes, info.isToday) }));
+  const matching = dashboardEntries(info.iso, now);
+  if (!pendingDashboardDate) {
+    renderDashboardPanel(shiftISODate(info.iso, -1), $('#schedule-list-previous'), now);
+    renderDashboardPanel(info.iso, $('#schedule-list'), now);
+    renderDashboardPanel(shiftISODate(info.iso, 1), $('#schedule-list-next'), now);
+    $('#day-carousel-track').style.transition = 'none';
+    $('#day-carousel-track').style.transform = 'translateX(-33.333333%)';
+    requestAnimationFrame(() => $('#day-carousel-track').style.removeProperty('transition'));
+    $('#schedule-list-previous').inert = true; $('#schedule-list-previous').setAttribute('aria-hidden', 'true');
+    $('#schedule-list-next').inert = true; $('#schedule-list-next').setAttribute('aria-hidden', 'true');
+    $('#schedule-list').inert = false; $('#schedule-list').removeAttribute('aria-hidden');
+  }
   $('#empty-title').textContent = info.isToday
-    ? matching.length ? 'کلاس‌های امروز تمام شده‌اند' : 'امروز کلاسی ندارید'
+    ? matching.length ? 'کلاس‌ها و رویدادهای امروز تمام شده‌اند' : 'امروز کلاسی ندارید'
     : `${info.weekday} ${info.shortFormatted} کلاسی ندارید`;
-  const list = $('#schedule-list');
-  list.replaceChildren(...rendered.map(item => createCourseCard(item.course, item.status, false, item.schedule)));
-  $('#empty-state').hidden = rendered.length !== 0; list.hidden = rendered.length === 0;
+  $('#empty-state').hidden = matching.length !== 0;
   const byDay = [...state.courses].sort((a, b) => firstCourseStart(a).localeCompare(firstCourseStart(b)) || a.title.localeCompare(b.title, 'fa'));
   $('#manage-course-list').replaceChildren(...byDay.map(course => createCourseCard(course, courseScheduleIsIncomplete(course) ? 'incomplete' : 'upcoming', true)));
   $('#manage-empty').hidden = byDay.length !== 0;
 }
 
+function createScheduleCard({ title, start, end, status, meta = [], className = '', onOpen }) {
+  const article = document.createElement('article');
+  article.className = `course-card status-${status} ${className}`;
+  const time = document.createElement('div'); time.className = 'course-time';
+  time.textContent = validTime(start) && validTime(end) ? `${displayTime(start)} – ${displayTime(end)}` : '—';
+  const info = document.createElement('div'); info.className = 'course-info';
+  const heading = document.createElement('h3'); heading.textContent = title; info.append(heading);
+  if (meta.length) {
+    const details = document.createElement('div'); details.className = 'course-meta';
+    meta.forEach(value => { const chip = document.createElement('span'); chip.className = 'meta-chip'; chip.textContent = value; details.append(chip); });
+    info.append(details);
+  }
+  article.append(time, info);
+  if (onOpen) {
+    article.tabIndex = 0; article.setAttribute('role', 'button'); article.setAttribute('aria-label', title); article.setAttribute('aria-haspopup', 'dialog');
+    article.addEventListener('click', onOpen);
+    article.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(); } });
+  }
+  return article;
+}
+
+function createEventCard(event, status) {
+  return createScheduleCard({
+    title: event.title, start: event.start, end: event.end, status, meta: ['رویداد'], className: 'event-card',
+    onOpen: () => openEventEditor(event)
+  });
+}
+
 function createCourseCard(course, status, editable = false, schedule = null) {
+  if (!editable) {
+    const meta = [];
+    if (course.className) meta.push(`کلاس ${course.className}`);
+    if (course.teacher) meta.push(`استاد ${course.teacher}`);
+    return createScheduleCard({
+      title: course.title, start: schedule?.start, end: schedule?.end, status, meta,
+      onOpen: () => openCourseDetails(course, activePageName())
+    });
+  }
   const article = document.createElement('article');
   article.className = `course-card status-${status} ${status === 'incomplete' ? 'incomplete' : ''} ${editable ? 'editable-card' : ''}`;
   const info = document.createElement('div'); info.className = 'course-info';
@@ -393,28 +576,6 @@ function createCourseCard(course, status, editable = false, schedule = null) {
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'card-action delete-course-card'; remove.setAttribute('aria-label', `حذف ${course.title}`); remove.title = 'حذف درس';
     const icon = document.createElement('img'); icon.src = 'assets/icons/delete.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true'); remove.append(icon); remove.addEventListener('click', () => removeCourse(course.id));
     actions.append(details, remove); article.append(info, actions);
-  } else {
-    const time = document.createElement('div'); time.className = 'course-time';
-    time.textContent = scheduleEntryIsComplete(schedule) ? `${displayTime(schedule.start)} – ${displayTime(schedule.end)}` : '—';
-    article.tabIndex = 0;
-    article.setAttribute('role', 'button');
-    article.setAttribute('aria-label', course.title);
-    article.setAttribute('aria-haspopup', 'dialog');
-    article.addEventListener('click', () => openCourseDetails(course, activePageName()));
-    article.addEventListener('keydown', event => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        openCourseDetails(course, activePageName());
-      }
-    });
-    const meta = document.createElement('div'); meta.className = 'course-meta';
-    if (course.className) { const className = document.createElement('span'); className.className = 'meta-chip'; className.textContent = `کلاس ${course.className}`; meta.append(className); }
-    if (course.teacher) {
-      const teacher = document.createElement('span'); teacher.className = 'meta-chip';
-      teacher.textContent = `استاد ${course.teacher}`; meta.append(teacher);
-    }
-    if (meta.childElementCount) info.append(meta);
-    article.append(time, info);
   }
   return article;
 }
@@ -428,7 +589,7 @@ function activeCourseSubpageCourse() {
     || (activeCourseDraft?.id === activeCourseSubpageCourseId ? activeCourseDraft : null);
 }
 
-function createCollectionCard({ title, subtitle = '', className = '', editLabel, deleteLabel, onEdit, onDelete, onOpen }) {
+function createCollectionCard({ title, subtitle = '', className = '', editLabel, deleteLabel, onEdit, onDelete, onOpen, hideEdit = false, openRole = 'link' }) {
   const card = document.createElement('article');
   card.className = `collection-card ${className}`;
   const content = document.createElement('div'); content.className = 'collection-card-content';
@@ -442,10 +603,11 @@ function createCollectionCard({ title, subtitle = '', className = '', editLabel,
   remove.title = deleteLabel; remove.setAttribute('aria-label', `${deleteLabel}: ${title}`);
   const icon = document.createElement('img'); icon.src = 'assets/icons/delete.webp'; icon.alt = ''; icon.setAttribute('aria-hidden', 'true');
   remove.append(icon); remove.addEventListener('click', event => { event.stopPropagation(); onDelete?.(); });
-  actions.append(edit, remove); card.append(content, actions);
+  if (!hideEdit) actions.append(edit);
+  actions.append(remove); card.append(content, actions);
 
   if (onOpen) {
-    card.tabIndex = 0; card.setAttribute('role', 'link'); card.setAttribute('aria-label', `${title}، باز کردن لینک`);
+    card.tabIndex = 0; card.setAttribute('role', openRole); card.setAttribute('aria-label', `${title}، ${openRole === 'link' ? 'باز کردن لینک' : 'جزئیات'}`);
     let pointerStart = null, suppressClick = false;
     card.addEventListener('pointerdown', event => {
       if (event.target.closest('button')) { pointerStart = null; suppressClick = false; return; }
@@ -828,8 +990,8 @@ function renderNotesPage() {
   $('#notes-course-name').textContent = course.title;
   const list = $('#notes-list');
   list.replaceChildren(...course.notes.map(note => createCollectionCard({
-    title: note.title, className: 'note-list-card', editLabel: 'ویرایش یادداشت', deleteLabel: 'حذف یادداشت',
-    onEdit: () => openNoteDialog(note), onDelete: () => removeNote(note.id)
+    title: note.title, className: 'note-list-card', editLabel: 'ویرایش یادداشت', deleteLabel: 'حذف یادداشت', hideEdit: true, openRole: 'button',
+    onOpen: () => openNoteDialog(note), onDelete: () => removeNote(note.id)
   })));
   $('#notes-empty').hidden = course.notes.length !== 0;
 }
@@ -863,10 +1025,27 @@ function removeCourse(id) {
 }
 
 function stepDashboardDate(days) {
+  if (pendingDashboardDate) return;
   const todayISO = targetDay(0).iso;
   const base = selectedDateMode === 'today' ? todayISO : selectedDateISO;
-  selectedDateISO = shiftISODate(base, days);
-  selectedDateMode = selectedDateISO === todayISO ? 'today' : 'custom';
+  if (Math.abs(days) !== 1 || !$('#day-carousel-track')) {
+    selectedDateISO = shiftISODate(base, days);
+    selectedDateMode = selectedDateISO === todayISO ? 'today' : 'custom'; render(); return;
+  }
+  pendingDashboardDate = shiftISODate(base, days);
+  const track = $('#day-carousel-track');
+  track.style.transition = '';
+  track.style.transform = days > 0 ? 'translateX(0)' : 'translateX(-66.666667%)';
+  setTimeout(() => finishDashboardSlide({ target: track }), 360);
+}
+
+function finishDashboardSlide(event) {
+  if (event.target !== $('#day-carousel-track') || !pendingDashboardDate) return;
+  const nextDate = pendingDashboardDate; pendingDashboardDate = '';
+  const track = $('#day-carousel-track');
+  track.style.transition = 'none'; track.style.transform = 'translateX(-33.333333%)';
+  selectedDateISO = nextDate;
+  selectedDateMode = selectedDateISO === targetDay(0).iso ? 'today' : 'custom';
   render();
 }
 
@@ -881,7 +1060,7 @@ function makeBackupFilename(prefix = 'class-schedule-backup') {
 }
 
 function backupPayload() {
-  return JSON.stringify({ formatVersion: 7, cycle: state.cycle, courses: state.courses }, null, 2);
+  return JSON.stringify({ formatVersion: 8, cycle: state.cycle, courses: state.courses, events: state.events, preferences: state.preferences }, null, 2);
 }
 
 function downloadBackup(payload, filename) {
@@ -1313,7 +1492,7 @@ async function applyAmozeshyarImport() {
       showToast('\u067e\u0634\u062a\u06cc\u0628\u0627\u0646 \u0630\u062e\u06cc\u0631\u0647 \u0646\u0634\u062f\u061b \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0641\u0639\u0644\u06cc \u062d\u0641\u0638 \u0634\u062f \u0648 \u0648\u0627\u0631\u062f\u0633\u0627\u0632\u06cc \u0627\u0646\u062c\u0627\u0645 \u0646\u0634\u062f.');
       return;
     }
-    state = { cycle: state.cycle, courses: enrichImportedCourses(pendingAmozeshyarCourses, state.courses, pendingAmozeshyarScheduleChoices) };
+    state = { ...state, courses: enrichImportedCourses(pendingAmozeshyarCourses, state.courses, pendingAmozeshyarScheduleChoices) };
     saveState(); render(); syncTermSettings(); pendingAmozeshyarCourses = null; pendingAmozeshyarScheduleChoices = new Map();
     $('#amozeshyar-preview').hidden = true;
     switchPage('courses');
@@ -1334,13 +1513,14 @@ async function importSchedule(file) {
     const courses = normalizeCourses(parsed.courses, courseSettings, oldParity === 'even');
     if (parsed.courses.length && !courses.length) throw new Error('هیچ درس معتبری در فایل پیدا نشد.');
     if (state.courses.length && !window.confirm('برنامهٔ فعلی با اطلاعات فایل پشتیبان جایگزین شود؟')) return;
-    state = { cycle, courses }; saveState(); render(); syncTermSettings();
+    state = { cycle, courses, events: normalizeEvents(parsed.events), preferences: normalizePreferences(parsed.preferences || state.preferences) }; saveState(); applyPreferences(); render(); syncTermSettings();
     showToast(numberFa.format(courses.length) + ' درس از پشتیبان بازیابی شد.');
   } catch (error) { showToast('بازیابی پشتیبان ناموفق بود: ' + (error.message || 'فایل JSON معتبر نیست.')); }
   finally { $('#import-file').value = ''; }
 }
 
 function init() {
+  applyPreferences();
   WEEK_DAY_ORDER.forEach(day => {
     const option = document.createElement('option'); option.value = day; option.textContent = day;
     $('#schedule-day').append(option);
@@ -1363,6 +1543,9 @@ function init() {
       saveState();
       syncTermSettings();
       showToast('تاریخ شروع ترم تنظیم شد.');
+    } else if (calendarTarget === 'event' && activeEventDraft) {
+      activeEventDraft.date = calendarDraftISO;
+      refreshEventDetails();
     } else {
       selectedDateISO = calendarDraftISO;
       selectedDateMode = calendarDraftISO === targetDay(0).iso ? 'today' : 'custom';
@@ -1376,6 +1559,39 @@ function init() {
     window.location.reload();
   });
   $('#add-course-button').addEventListener('click', openNewCourseDetails);
+  $('#day-carousel-track').addEventListener('transitionend', finishDashboardSlide);
+  $('#theme-mode').addEventListener('change', event => { state.preferences.theme = event.target.value; saveState(); applyPreferences(); });
+  $('#theme-accent').addEventListener('change', event => { state.preferences.accent = event.target.value; saveState(); applyPreferences(); });
+  $('#quick-add-toggle').addEventListener('click', () => {
+    const options = $('#quick-add-options'), expanded = options.hidden;
+    options.hidden = !expanded; $('#quick-add-toggle').setAttribute('aria-expanded', String(expanded));
+    $('#quick-add').classList.toggle('expanded', expanded);
+  });
+  $('#quick-add-course').addEventListener('click', () => { $('#quick-add-toggle').click(); openNewCourseDetails(); });
+  $('#quick-add-event').addEventListener('click', () => { $('#quick-add-toggle').click(); openEventEditor(); });
+  $('#event-date-button').addEventListener('click', () => openDatePicker('event'));
+  $('#event-dialog').addEventListener('click', event => {
+    const row = event.target.closest('[data-event-field]');
+    if (row) openEventFieldEditor(row.dataset.eventField);
+  });
+  $('#event-form').addEventListener('submit', saveEvent);
+  $('#event-delete-button').addEventListener('click', deleteActiveEvent);
+  $('.close-event').addEventListener('click', () => $('#event-dialog').close());
+  $('.cancel-event').addEventListener('click', () => $('#event-dialog').close());
+  $('#event-field-form').addEventListener('submit', saveEventField);
+  $('.close-event-field').addEventListener('click', () => $('#event-field-dialog').close());
+  $('.cancel-event-field').addEventListener('click', () => $('#event-field-dialog').close());
+  ['event-field-value', 'event-field-textarea'].forEach(id => $(`#${id}`).addEventListener('input', event => {
+    if (event.target.type === 'time') return;
+    const start = event.target.selectionStart, end = event.target.selectionEnd;
+    const converted = toFaDigits(event.target.value);
+    if (converted !== event.target.value) { event.target.value = converted; event.target.setSelectionRange(start, end); }
+  }));
+  document.addEventListener('click', event => {
+    if (performance.now() < dashboardClickSuppressUntil && event.target.closest('#day-carousel')) {
+      event.preventDefault(); event.stopImmediatePropagation(); dashboardClickSuppressUntil = 0;
+    }
+  }, true);
   $('#menu-button').addEventListener('click', () => { if (!$('#menu-drawer').open) openMenuDrawer(); });
   $('.close-menu').addEventListener('click', () => closeMenuDrawer());
   let horizontalGesture = null, gestureFrame = 0, suppressedBackdropTap = null;
@@ -1407,6 +1623,7 @@ function init() {
         activeCourseDraft = null;
         activeDetailsCourseId = '';
       }
+      if (dialog.id === 'event-dialog') activeEventDraft = null;
       handleModalClosed();
     });
   });
@@ -1474,6 +1691,42 @@ function init() {
       settleMenuDrawer(true);
     }
     horizontalGesture = null;
+  }, { passive: true });
+  let dashboardSwipe = null;
+  document.addEventListener('touchstart', event => {
+    if (event.touches.length !== 1 || activePageName() !== 'dashboard' || $('#menu-drawer').open) { dashboardSwipe = null; return; }
+    const touch = event.touches[0];
+    if (touch.clientX >= window.innerWidth - 24 || !event.target.closest('#day-carousel, .day-context')
+      || event.target.closest('button,a,input,select,textarea')) { dashboardSwipe = null; return; }
+    dashboardSwipe = { x: touch.clientX, y: touch.clientY, axis: '' };
+  }, { passive: true });
+  document.addEventListener('touchmove', event => {
+    if (!dashboardSwipe || event.touches.length !== 1) return;
+    const touch = event.touches[0], dx = touch.clientX - dashboardSwipe.x, dy = touch.clientY - dashboardSwipe.y;
+    if (!dashboardSwipe.axis && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.2) dashboardSwipe.axis = 'x';
+    if (!dashboardSwipe.axis && Math.abs(dy) > 20 && Math.abs(dy) > Math.abs(dx)) { dashboardSwipe = null; return; }
+    if (dashboardSwipe.axis === 'x') {
+      event.preventDefault();
+      $('#day-carousel-track').style.transition = 'none';
+      $('#day-carousel-track').style.transform = `translateX(calc(-33.333333% + ${dx}px))`;
+    }
+  }, { passive: false });
+  document.addEventListener('touchend', event => {
+    if (!dashboardSwipe) return;
+    const gesture = dashboardSwipe, dx = event.changedTouches[0].clientX - gesture.x;
+    dashboardSwipe = null;
+    if (gesture.axis !== 'x') return;
+    event.preventDefault(); dashboardClickSuppressUntil = performance.now() + 450;
+    if (dx > 42) stepDashboardDate(1);
+    else if (dx < -42) stepDashboardDate(-1);
+    else {
+      const track = $('#day-carousel-track'); track.style.transition = ''; track.style.transform = 'translateX(-33.333333%)';
+    }
+  }, { passive: false });
+  document.addEventListener('touchcancel', () => {
+    if (!dashboardSwipe) return;
+    dashboardSwipe = null;
+    const track = $('#day-carousel-track'); track.style.transition = ''; track.style.transform = 'translateX(-33.333333%)';
   }, { passive: true });
   document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => { switchPage(button.dataset.page); closeMenuDrawer(); }));
   $('#export-button').addEventListener('click', exportSchedule);

@@ -333,3 +333,67 @@ button:active{transform:scale(.96)}
 .schedule-list-card .collection-card-content h3{font-variant-numeric:tabular-nums}
 .note-list-card{min-height:60px}
 @media(max-width:370px){.course-subpage-title h1{font-size:17px}.course-subpage-heading .primary-button{padding-inline:8px;font-size:13px}.collection-card{gap:7px;padding:7px 8px}.collection-card-content h3{font-size:14px}}
+
+/* Version 1.15.7: three-day dashboard, event cards and independent appearance choices. */
+[hidden]{display:none!important}
+.day-carousel{overflow:hidden;touch-action:pan-y}
+.day-carousel-track{display:flex;direction:ltr;width:300%;transform:translateX(-33.333333%);transition:transform 260ms cubic-bezier(.22,1,.36,1);will-change:transform}
+.day-carousel .day-panel{flex:0 0 33.333333%;width:33.333333%;min-width:0;align-content:start;padding:0 2px;direction:rtl}
+.empty-link{padding:0;border:0;background:none;color:var(--purple-soft);font:inherit;font-size:14px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.quick-add{position:fixed;z-index:4;left:max(18px,calc((100vw - 560px)/2));bottom:max(18px,env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.quick-add-toggle{display:grid;place-items:center;width:58px;height:58px;border:0;border-radius:50%;background:var(--purple);color:#fff;font-size:38px;line-height:1;box-shadow:0 8px 24px #0007;cursor:pointer}
+.quick-add.expanded .quick-add-toggle{transform:rotate(45deg)}
+.quick-add-options{display:grid;gap:8px;animation:quick-add-rise .18s cubic-bezier(.2,.8,.2,1) both}
+.quick-add-choice{min-width:102px;min-height:46px;padding:0 16px;border:1px solid var(--line);border-radius:24px;background:var(--panel);color:var(--text);font:inherit;font-weight:700;box-shadow:0 5px 18px #0005;cursor:pointer}
+@keyframes quick-add-rise{from{opacity:0;transform:translateY(12px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+.event-card{border-right-color:var(--purple)}
+.event-card.status-upcoming{border-right-color:var(--amber)}
+.event-card.status-live{border-right-color:var(--green);background:#121a18}
+.event-card.status-done{border-right-color:#38bdf8;background:#101c2b;opacity:1}
+.appearance-settings{display:grid;gap:10px;margin:18px 0;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.appearance-settings h2{margin:0 0 2px;font-size:16px;color:var(--text)}
+.appearance-settings .field-label{margin:0;font-size:14px}
+.appearance-settings select{height:48px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:var(--panel-2);color:var(--text);color-scheme:inherit;font:inherit}
+.help-page h1{margin:8px 0 16px;font-size:21px}
+.help-card{margin:0 0 10px;padding:14px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}
+.help-card h2{margin:0 0 6px;font-size:16px;color:var(--purple-soft)}
+.help-card p{margin:0;color:var(--muted);font-size:14px;line-height:1.8}
+.event-dialog form{padding:17px}
+.event-details-list{margin:0 0 14px}
+.event-time-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.event-time-row .details-row{grid-template-columns:minmax(0,1fr);gap:2px;min-height:62px}
+.event-time-row .details-row>span,.event-time-row .details-row>strong{text-align:center}
+.event-actions{justify-content:space-between}
+.event-delete{margin-inline-end:auto;background:#29131b;color:#ff9ca6}
+#event-field-form>input,#event-field-form>textarea{width:100%;min-height:48px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#100e16;color:var(--text);font:inherit;font-size:16px}
+#event-field-form>textarea{min-height:140px;resize:vertical}
+#event-field-form>input[type=time]{direction:ltr;text-align:center}
+.note-list-card{cursor:pointer;touch-action:manipulation}
+.note-list-card:active{border-color:var(--purple);background:var(--panel-2)}
+.note-list-card:focus-visible{outline:2px solid var(--purple);outline-offset:2px}
+.note-list-card .collection-card-actions{grid-column:2}
+
+:root[data-accent="blue"]{--purple:#1684ed;--purple-soft:#61b6ff}
+:root[data-accent="teal"]{--purple:#009c91;--purple-soft:#52d9cd}
+:root[data-accent="green"]{--purple:#20a45a;--purple-soft:#63db91}
+:root[data-accent="orange"]{--purple:#d97516;--purple-soft:#ffb45e}
+:root[data-accent="pink"]{--purple:#d54891;--purple-soft:#ff91c5}
+:root[data-accent="red"]{--purple:#d54151;--purple-soft:#ff8994}
+.primary-button:active{filter:brightness(.88)}
+.day-option.active,.menu-drawer .page-link.active{border-color:var(--purple);background:color-mix(in srgb,var(--purple) 18%,var(--panel));color:var(--purple-soft)}
+.details-row:active,.link-list-card:active{border-color:var(--purple);background:color-mix(in srgb,var(--purple) 14%,var(--panel))}
+.empty-link{color:var(--purple-soft)}
+.toast{background:var(--purple)}
+:root[data-theme="light"]{color-scheme:light;--bg:#f3f5f9;--panel:#fff;--panel-2:#e9edf4;--line:#d5dbe5;--text:#18202d;--muted:#667286;--gray:#697286}
+:root[data-theme="light"] body{background:var(--bg);color:var(--text)}
+:root[data-theme="light"] .day-switch{background:transparent}
+:root[data-theme="light"] .settings-form input,:root[data-theme="light"] .settings-form select,:root[data-theme="light"] .field-label input,:root[data-theme="light"] .field-label select,:root[data-theme="light"] #event-field-form>input,:root[data-theme="light"] #event-field-form>textarea,:root[data-theme="light"] .note-dialog textarea{background:#fff;color:var(--text);color-scheme:light}
+:root[data-theme="light"] .details-row{background:var(--panel-2);color:var(--text)}
+:root[data-theme="light"] .course-card.status-live,:root[data-theme="light"] .event-card.status-live{background:#e6f7ef}
+:root[data-theme="light"] .course-card.status-done,:root[data-theme="light"] .event-card.status-done{background:#e8f3ff}
+:root[data-theme="light"] .event-delete,:root[data-theme="light"] .delete-course-card{background:#fff0f1;color:#b52437}
+:root[data-theme="light"] .course-time{color:var(--text)}
+:root[data-theme="light"] .course-meta{color:var(--muted)}
+:root[data-theme="light"] .day-capsule strong{color:var(--purple)}
+:root[data-theme="light"] .quick-add-toggle{color:#fff}
+@media(prefers-reduced-motion:reduce){.day-carousel-track,.quick-add-options{transition:none!important;animation:none!important}}

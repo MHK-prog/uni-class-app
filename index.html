@@ -34,9 +34,22 @@
         <button type="button" class="day-step next-day" id="next-day-button" aria-label="یک روز جلو"><img src="assets/icons/back.webp" alt="" aria-hidden="true"></button>
       </nav>
       <section class="schedule-section" aria-label="برنامهٔ کلاس‌ها">
-        <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
-        <div id="empty-state" class="empty-state" hidden><p id="empty-title">امروز کلاسی ندارید</p></div>
+        <div id="day-carousel" class="day-carousel">
+          <div id="day-carousel-track" class="day-carousel-track">
+            <div id="schedule-list-next" class="schedule-list day-panel" aria-label="فردا"></div>
+            <div id="schedule-list" class="schedule-list day-panel" aria-live="polite"></div>
+            <div id="schedule-list-previous" class="schedule-list day-panel" aria-label="دیروز"></div>
+          </div>
+        </div>
+        <div id="empty-state" class="empty-state" hidden><p id="empty-title">امروز کلاسی ندارید</p><button type="button" class="empty-link page-link" data-page="courses">مدیریت درس‌ها</button></div>
       </section>
+      <div class="quick-add" id="quick-add">
+        <div class="quick-add-options" id="quick-add-options" hidden>
+          <button type="button" class="quick-add-choice" id="quick-add-course">درس</button>
+          <button type="button" class="quick-add-choice" id="quick-add-event">رویداد</button>
+        </div>
+        <button type="button" class="quick-add-toggle" id="quick-add-toggle" aria-label="افزودن درس یا رویداد" aria-expanded="false">+</button>
+      </div>
     </section>
 
     <section class="app-page" id="page-courses" data-page-panel="courses" hidden>
@@ -77,11 +90,25 @@
       <div class="settings-form term-settings-form">
         <label class="field-label">تاریخ شروع ترم<button class="date-picker-trigger" id="term-start-date-picker" type="button" aria-haspopup="dialog" aria-controls="date-picker-dialog"><span id="term-start-date-label">—</span></button></label>
       </div>
+      <div class="appearance-settings">
+        <h2>رنگ برنامه</h2>
+        <label class="field-label">تم<select id="theme-mode"><option value="dark">دارک</option><option value="light">لایت</option></select></label>
+        <label class="field-label">رنگ<select id="theme-accent"><option value="purple">بنفش</option><option value="blue">آبی</option><option value="teal">فیروزه‌ای</option><option value="green">سبز</option><option value="orange">نارنجی</option><option value="pink">صورتی</option><option value="red">قرمز</option></select></label>
+      </div>
       <div class="settings-actions">
         <button class="menu-action" id="export-button" type="button"><img class="action-icon" src="assets/icons/download.webp" width="26" height="26" alt="" aria-hidden="true">ذخیرهٔ پشتیبان</button>
         <button class="menu-action page-link" type="button" data-page="amozeshyar"><img class="action-icon" src="assets/icons/upload.webp" width="26" height="26" alt="" aria-hidden="true">وارد کردن از آموزشیار</button>
         <button class="menu-action refresh-button" id="refresh-button" type="button"><img class="menu-item-icon" src="assets/icons/reload.webp" width="24" height="24" alt="" aria-hidden="true"><span>همگام‌سازی برنامه</span></button>
       </div>
+    </section>
+
+    <section class="app-page help-page" id="page-help" data-page-panel="help" hidden>
+      <h1>راهنما</h1>
+      <article class="help-card"><h2>دیدن برنامه</h2><p>برای رفتن به روز قبل یا بعد از پیکان‌ها استفاده کنید. دکمهٔ «تاریخ» امکان انتخاب هر روز را می‌دهد.</p></article>
+      <article class="help-card"><h2>افزودن درس</h2><p>از منو وارد «مدیریت درس‌ها» شوید و «افزودن درس» را بزنید. با انتخاب هر ردیف، نام درس، استاد، کلاس، زمان‌ها و لینک‌ها را تکمیل کنید.</p></article>
+      <article class="help-card"><h2>افزودن رویداد</h2><p>دکمهٔ + پایین صفحه را بزنید و «رویداد» را انتخاب کنید. عنوان و تاریخ را وارد کنید و در صورت نیاز ساعت و توضیحات را هم اضافه کنید.</p></article>
+      <article class="help-card"><h2>یادداشت، لینک و زمان کلاس</h2><p>از جزئیات هر درس، بخش مربوط را باز کنید. در فهرست‌ها می‌توانید موردها را اضافه، ویرایش یا حذف کنید.</p></article>
+      <article class="help-card"><h2>پشتیبان و تنظیمات</h2><p>در «تنظیمات» رنگ برنامه را انتخاب کنید و برای نگه‌داشتن یا بازیابی اطلاعات از فایل پشتیبان استفاده کنید.</p></article>
     </section>
 
     <section class="app-page import-page" id="page-amozeshyar" data-page-panel="amozeshyar" hidden>
@@ -111,7 +138,8 @@
     <button class="menu-action page-link active" type="button" data-page="dashboard">برنامه</button>
     <button class="menu-action page-link" type="button" data-page="courses">مدیریت درس‌ها</button>
     <button class="menu-action page-link" type="button" data-page="settings">تنظیمات</button>
-    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">1.15.3</span></footer>
+    <button class="menu-action page-link" type="button" data-page="help">راهنما</button>
+    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">1.15.7</span></footer>
   </dialog>
   <dialog id="date-picker-dialog" class="date-picker-dialog" aria-labelledby="calendar-title">
     <div class="dialog-heading"><h2 id="calendar-title">انتخاب تاریخ</h2><button type="button" class="icon-button close-calendar" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>
@@ -119,6 +147,30 @@
     <div class="calendar-weekdays" aria-hidden="true"><span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span></div>
     <div class="calendar-grid" id="calendar-grid" role="group" aria-label="روزهای ماه"></div>
     <div class="calendar-actions"><button class="primary-button icon-action" id="calendar-apply" type="button"><img src="assets/icons/check.svg" width="24" height="24" alt="" aria-hidden="true"><span>انتخاب</span></button></div>
+  </dialog>
+  <dialog id="event-dialog" class="editor-dialog event-dialog">
+    <form id="event-form">
+      <div class="dialog-heading"><h2 id="event-dialog-title">رویداد تازه</h2><button type="button" class="icon-button close-event" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>
+      <div class="details-list event-details-list">
+        <button type="button" class="details-row" data-event-field="title"><span>عنوان رویداد</span><strong id="event-title-value">برای نوشتن عنوان بزنید</strong></button>
+        <button type="button" class="details-row" id="event-date-button"><span>تاریخ رویداد</span><strong id="event-date-value">انتخاب تاریخ</strong></button>
+        <div class="event-time-row">
+          <button type="button" class="details-row" data-event-field="start"><span>زمان شروع</span><strong id="event-start-value">انتخاب ساعت</strong></button>
+          <button type="button" class="details-row" data-event-field="end"><span>زمان پایان</span><strong id="event-end-value">انتخاب ساعت</strong></button>
+        </div>
+        <button type="button" class="details-row" data-event-field="description"><span>توضیحات</span><strong id="event-description-value">برای نوشتن توضیحات بزنید</strong></button>
+      </div>
+      <div class="dialog-actions event-actions"><button type="button" class="secondary-button event-delete" id="event-delete-button" hidden>حذف</button><button type="button" class="secondary-button cancel-event">لغو</button><button type="submit" class="primary-button icon-action"><img src="assets/icons/check.svg" width="24" height="24" alt="" aria-hidden="true"><span>ذخیره</span></button></div>
+    </form>
+  </dialog>
+  <dialog id="event-field-dialog" class="editor-dialog">
+    <form id="event-field-form">
+      <div class="dialog-heading"><h2 id="event-field-dialog-title">ویرایش رویداد</h2><button type="button" class="icon-button close-event-field" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>
+      <input id="event-field-value" type="text" maxlength="100">
+      <textarea id="event-field-textarea" rows="5" maxlength="2000" hidden></textarea>
+      <p id="event-field-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" class="secondary-button cancel-event-field">لغو</button><button type="submit" class="primary-button icon-action"><img src="assets/icons/check.svg" width="24" height="24" alt="" aria-hidden="true"><span>ذخیره</span></button></div>
+    </form>
   </dialog>
   <dialog id="course-details-dialog" class="course-details-dialog">
     <div class="dialog-heading"><h2 id="details-title">جزئیات درس</h2><button type="button" class="icon-button close-details" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>

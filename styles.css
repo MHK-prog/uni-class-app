@@ -334,11 +334,11 @@ button:active{transform:scale(.96)}
 .note-list-card{min-height:60px}
 @media(max-width:370px){.course-subpage-title h1{font-size:17px}.course-subpage-heading .primary-button{padding-inline:8px;font-size:13px}.collection-card{gap:7px;padding:7px 8px}.collection-card-content h3{font-size:14px}}
 
-/* Version 1.15.7: three-day dashboard, event cards and independent appearance choices. */
+/* Version 1.15.8: stable three-day dashboard panel sizing. */
 [hidden]{display:none!important}
-.day-carousel{overflow:hidden;touch-action:pan-y}
-.day-carousel-track{display:flex;direction:ltr;width:300%;transform:translateX(-33.333333%);transition:transform 260ms cubic-bezier(.22,1,.36,1);will-change:transform}
-.day-carousel .day-panel{flex:0 0 33.333333%;width:33.333333%;min-width:0;align-content:start;padding:0 2px;direction:rtl}
+.day-carousel{width:100%;overflow:hidden;touch-action:pan-y}
+.day-carousel-track{display:flex;direction:ltr;width:100%;transform:translateX(-100%);transition:transform 260ms cubic-bezier(.22,1,.36,1);will-change:transform}
+.day-carousel .day-panel{flex:0 0 100%;width:100%;min-width:100%;align-content:start;padding:0 2px;direction:rtl}
 .empty-link{padding:0;border:0;background:none;color:var(--purple-soft);font:inherit;font-size:14px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .quick-add{position:fixed;z-index:4;left:max(18px,calc((100vw - 560px)/2));bottom:max(18px,env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-start;gap:10px}
 .quick-add-toggle{display:grid;place-items:center;width:58px;height:58px;border:0;border-radius:50%;background:var(--purple);color:#fff;font-size:38px;line-height:1;box-shadow:0 8px 24px #0007;cursor:pointer}

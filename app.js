@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.15.7';
+const APP_VERSION = '1.15.8';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -513,7 +513,7 @@ function render(now = new Date()) {
     renderDashboardPanel(info.iso, $('#schedule-list'), now);
     renderDashboardPanel(shiftISODate(info.iso, 1), $('#schedule-list-next'), now);
     $('#day-carousel-track').style.transition = 'none';
-    $('#day-carousel-track').style.transform = 'translateX(-33.333333%)';
+    $('#day-carousel-track').style.transform = 'translateX(-100%)';
     requestAnimationFrame(() => $('#day-carousel-track').style.removeProperty('transition'));
     $('#schedule-list-previous').inert = true; $('#schedule-list-previous').setAttribute('aria-hidden', 'true');
     $('#schedule-list-next').inert = true; $('#schedule-list-next').setAttribute('aria-hidden', 'true');
@@ -1035,7 +1035,7 @@ function stepDashboardDate(days) {
   pendingDashboardDate = shiftISODate(base, days);
   const track = $('#day-carousel-track');
   track.style.transition = '';
-  track.style.transform = days > 0 ? 'translateX(0)' : 'translateX(-66.666667%)';
+  track.style.transform = days > 0 ? 'translateX(0)' : 'translateX(-200%)';
   setTimeout(() => finishDashboardSlide({ target: track }), 360);
 }
 
@@ -1043,7 +1043,7 @@ function finishDashboardSlide(event) {
   if (event.target !== $('#day-carousel-track') || !pendingDashboardDate) return;
   const nextDate = pendingDashboardDate; pendingDashboardDate = '';
   const track = $('#day-carousel-track');
-  track.style.transition = 'none'; track.style.transform = 'translateX(-33.333333%)';
+  track.style.transition = 'none'; track.style.transform = 'translateX(-100%)';
   selectedDateISO = nextDate;
   selectedDateMode = selectedDateISO === targetDay(0).iso ? 'today' : 'custom';
   render();
@@ -1708,7 +1708,7 @@ function init() {
     if (dashboardSwipe.axis === 'x') {
       event.preventDefault();
       $('#day-carousel-track').style.transition = 'none';
-      $('#day-carousel-track').style.transform = `translateX(calc(-33.333333% + ${dx}px))`;
+      $('#day-carousel-track').style.transform = `translateX(calc(-100% + ${dx}px))`;
     }
   }, { passive: false });
   document.addEventListener('touchend', event => {
@@ -1720,13 +1720,13 @@ function init() {
     if (dx > 42) stepDashboardDate(1);
     else if (dx < -42) stepDashboardDate(-1);
     else {
-      const track = $('#day-carousel-track'); track.style.transition = ''; track.style.transform = 'translateX(-33.333333%)';
+      const track = $('#day-carousel-track'); track.style.transition = ''; track.style.transform = 'translateX(-100%)';
     }
   }, { passive: false });
   document.addEventListener('touchcancel', () => {
     if (!dashboardSwipe) return;
     dashboardSwipe = null;
-    const track = $('#day-carousel-track'); track.style.transition = ''; track.style.transform = 'translateX(-33.333333%)';
+    const track = $('#day-carousel-track'); track.style.transition = ''; track.style.transform = 'translateX(-100%)';
   }, { passive: true });
   document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => { switchPage(button.dataset.page); closeMenuDrawer(); }));
   $('#export-button').addEventListener('click', exportSchedule);

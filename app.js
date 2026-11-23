@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.15.8';
+const APP_VERSION = '1.15.9';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -18,7 +18,7 @@ const ACCENT_COLORS = ['purple', 'blue', 'teal', 'green', 'orange', 'pink', 'red
 const $ = selector => document.querySelector(selector);
 let state = loadState();
 let selectedDateISO = targetDay(0).iso;
-let selectedDateMode = 'today';
+let selectedDateFollowsToday = true;
 let toastTimer;
 let activeDetailsCourseId = '';
 let activeDetailsReturnPage = 'dashboard';
@@ -38,8 +38,6 @@ let drawerCloseTimer;
 let calendarTarget = 'dashboard';
 let calendarDraftISO = '';
 let calendarCursorISO = '';
-let pendingDashboardDate = '';
-let dashboardClickSuppressUntil = 0;
 let pendingAmozeshyarCourses = null;
 let pendingAmozeshyarScheduleChoices = new Map();
 let nativeBackupResolve = null;
@@ -495,30 +493,16 @@ function renderDashboardPanel(dateISO, element, now = new Date()) {
 }
 
 function render(now = new Date()) {
-  const today = targetDay(0, now);
-  if (selectedDateMode === 'today') selectedDateISO = today.iso;
+  if (selectedDateFollowsToday) selectedDateISO = targetDay(0, now).iso;
   const info = selectedInfo(now), current = iranParts(now);
   $('#iran-clock').textContent = toFaDigits(`${String(current.hour).padStart(2, '0')}:${String(current.minute).padStart(2, '0')}`);
   $('#selected-date').textContent = info.shortFormatted;
   $('#selected-weekday').textContent = info.weekday;
   $('#cycle-week-label').textContent = parityLabel(info.weekIndex);
-  const isToday = info.iso === today.iso, todayButton = $('.day-option[data-day="today"]');
-  todayButton.classList.toggle('active', isToday); todayButton.setAttribute('aria-pressed', String(isToday));
-  const dateButton = $('#pick-date-button');
-  dateButton.classList.toggle('active', !isToday); dateButton.setAttribute('aria-pressed', String(!isToday));
   $('#drawer-app-version').textContent = toFaDigits(APP_VERSION);
   const matching = dashboardEntries(info.iso, now);
-  if (!pendingDashboardDate) {
-    renderDashboardPanel(shiftISODate(info.iso, -1), $('#schedule-list-previous'), now);
-    renderDashboardPanel(info.iso, $('#schedule-list'), now);
-    renderDashboardPanel(shiftISODate(info.iso, 1), $('#schedule-list-next'), now);
-    $('#day-carousel-track').style.transition = 'none';
-    $('#day-carousel-track').style.transform = 'translateX(-100%)';
-    requestAnimationFrame(() => $('#day-carousel-track').style.removeProperty('transition'));
-    $('#schedule-list-previous').inert = true; $('#schedule-list-previous').setAttribute('aria-hidden', 'true');
-    $('#schedule-list-next').inert = true; $('#schedule-list-next').setAttribute('aria-hidden', 'true');
-    $('#schedule-list').inert = false; $('#schedule-list').removeAttribute('aria-hidden');
-  }
+  renderDashboardPanel(info.iso, $('#schedule-list'), now);
+  $('#schedule-list').hidden = matching.length === 0;
   $('#empty-title').textContent = info.isToday
     ? matching.length ? 'کلاس‌ها و رویدادهای امروز تمام شده‌اند' : 'امروز کلاسی ندارید'
     : `${info.weekday} ${info.shortFormatted} کلاسی ندارید`;
@@ -528,9 +512,28 @@ function render(now = new Date()) {
   $('#manage-empty').hidden = byDay.length !== 0;
 }
 
+function refreshClockAndStatuses(now = new Date()) {
+  const current = iranParts(now), todayISO = targetDay(0, now).iso;
+  if (selectedDateFollowsToday && selectedDateISO !== todayISO) { render(now); return; }
+  $('#iran-clock').textContent = toFaDigits(`${String(current.hour).padStart(2, '0')}:${String(current.minute).padStart(2, '0')}`);
+  const selected = dateFromISO(selectedDateISO || todayISO);
+  const isToday = selected.iso === todayISO, isPast = selected.iso < todayISO;
+  const currentMinutes = current.hour * 60 + current.minute;
+  $('#schedule-list').querySelectorAll('.course-card').forEach(card => {
+    const { scheduleStart: start, scheduleEnd: end } = card.dataset;
+    const status = validTime(start) && validTime(end)
+      ? statusFor({ start, end }, currentMinutes, isToday, isPast)
+      : isPast ? 'done' : 'upcoming';
+    card.classList.remove('status-upcoming', 'status-live', 'status-done', 'status-incomplete');
+    card.classList.add(`status-${status}`);
+  });
+}
+
 function createScheduleCard({ title, start, end, status, meta = [], className = '', onOpen }) {
   const article = document.createElement('article');
   article.className = `course-card status-${status} ${className}`;
+  article.dataset.scheduleStart = validTime(start) ? start : '';
+  article.dataset.scheduleEnd = validTime(end) ? end : '';
   const time = document.createElement('div'); time.className = 'course-time';
   time.textContent = validTime(start) && validTime(end) ? `${displayTime(start)} – ${displayTime(end)}` : '—';
   const info = document.createElement('div'); info.className = 'course-info';
@@ -1025,27 +1028,8 @@ function removeCourse(id) {
 }
 
 function stepDashboardDate(days) {
-  if (pendingDashboardDate) return;
-  const todayISO = targetDay(0).iso;
-  const base = selectedDateMode === 'today' ? todayISO : selectedDateISO;
-  if (Math.abs(days) !== 1 || !$('#day-carousel-track')) {
-    selectedDateISO = shiftISODate(base, days);
-    selectedDateMode = selectedDateISO === todayISO ? 'today' : 'custom'; render(); return;
-  }
-  pendingDashboardDate = shiftISODate(base, days);
-  const track = $('#day-carousel-track');
-  track.style.transition = '';
-  track.style.transform = days > 0 ? 'translateX(0)' : 'translateX(-200%)';
-  setTimeout(() => finishDashboardSlide({ target: track }), 360);
-}
-
-function finishDashboardSlide(event) {
-  if (event.target !== $('#day-carousel-track') || !pendingDashboardDate) return;
-  const nextDate = pendingDashboardDate; pendingDashboardDate = '';
-  const track = $('#day-carousel-track');
-  track.style.transition = 'none'; track.style.transform = 'translateX(-100%)';
-  selectedDateISO = nextDate;
-  selectedDateMode = selectedDateISO === targetDay(0).iso ? 'today' : 'custom';
+  selectedDateISO = shiftISODate(selectedDateISO || targetDay(0).iso, days);
+  selectedDateFollowsToday = selectedDateISO === targetDay(0).iso;
   render();
 }
 
@@ -1525,11 +1509,6 @@ function init() {
     const option = document.createElement('option'); option.value = day; option.textContent = day;
     $('#schedule-day').append(option);
   });
-  document.querySelectorAll('.day-option[data-day]').forEach(button => button.addEventListener('click', () => {
-    selectedDateMode = 'today';
-    selectedDateISO = targetDay(0).iso;
-    render();
-  }));
   $('#previous-day-button').addEventListener('click', () => stepDashboardDate(-1));
   $('#next-day-button').addEventListener('click', () => stepDashboardDate(1));
   $('#pick-date-button').addEventListener('click', () => openDatePicker('dashboard'));
@@ -1548,7 +1527,7 @@ function init() {
       refreshEventDetails();
     } else {
       selectedDateISO = calendarDraftISO;
-      selectedDateMode = calendarDraftISO === targetDay(0).iso ? 'today' : 'custom';
+      selectedDateFollowsToday = selectedDateISO === targetDay(0).iso;
     }
     $('#date-picker-dialog').close();
     render();
@@ -1559,7 +1538,6 @@ function init() {
     window.location.reload();
   });
   $('#add-course-button').addEventListener('click', openNewCourseDetails);
-  $('#day-carousel-track').addEventListener('transitionend', finishDashboardSlide);
   $('#theme-mode').addEventListener('change', event => { state.preferences.theme = event.target.value; saveState(); applyPreferences(); });
   $('#theme-accent').addEventListener('change', event => { state.preferences.accent = event.target.value; saveState(); applyPreferences(); });
   $('#quick-add-toggle').addEventListener('click', () => {
@@ -1587,11 +1565,6 @@ function init() {
     const converted = toFaDigits(event.target.value);
     if (converted !== event.target.value) { event.target.value = converted; event.target.setSelectionRange(start, end); }
   }));
-  document.addEventListener('click', event => {
-    if (performance.now() < dashboardClickSuppressUntil && event.target.closest('#day-carousel')) {
-      event.preventDefault(); event.stopImmediatePropagation(); dashboardClickSuppressUntil = 0;
-    }
-  }, true);
   $('#menu-button').addEventListener('click', () => { if (!$('#menu-drawer').open) openMenuDrawer(); });
   $('.close-menu').addEventListener('click', () => closeMenuDrawer());
   let horizontalGesture = null, gestureFrame = 0, suppressedBackdropTap = null;
@@ -1692,42 +1665,6 @@ function init() {
     }
     horizontalGesture = null;
   }, { passive: true });
-  let dashboardSwipe = null;
-  document.addEventListener('touchstart', event => {
-    if (event.touches.length !== 1 || activePageName() !== 'dashboard' || $('#menu-drawer').open) { dashboardSwipe = null; return; }
-    const touch = event.touches[0];
-    if (touch.clientX >= window.innerWidth - 24 || !event.target.closest('#day-carousel, .day-context')
-      || event.target.closest('button,a,input,select,textarea')) { dashboardSwipe = null; return; }
-    dashboardSwipe = { x: touch.clientX, y: touch.clientY, axis: '' };
-  }, { passive: true });
-  document.addEventListener('touchmove', event => {
-    if (!dashboardSwipe || event.touches.length !== 1) return;
-    const touch = event.touches[0], dx = touch.clientX - dashboardSwipe.x, dy = touch.clientY - dashboardSwipe.y;
-    if (!dashboardSwipe.axis && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.2) dashboardSwipe.axis = 'x';
-    if (!dashboardSwipe.axis && Math.abs(dy) > 20 && Math.abs(dy) > Math.abs(dx)) { dashboardSwipe = null; return; }
-    if (dashboardSwipe.axis === 'x') {
-      event.preventDefault();
-      $('#day-carousel-track').style.transition = 'none';
-      $('#day-carousel-track').style.transform = `translateX(calc(-100% + ${dx}px))`;
-    }
-  }, { passive: false });
-  document.addEventListener('touchend', event => {
-    if (!dashboardSwipe) return;
-    const gesture = dashboardSwipe, dx = event.changedTouches[0].clientX - gesture.x;
-    dashboardSwipe = null;
-    if (gesture.axis !== 'x') return;
-    event.preventDefault(); dashboardClickSuppressUntil = performance.now() + 450;
-    if (dx > 42) stepDashboardDate(1);
-    else if (dx < -42) stepDashboardDate(-1);
-    else {
-      const track = $('#day-carousel-track'); track.style.transition = ''; track.style.transform = 'translateX(-100%)';
-    }
-  }, { passive: false });
-  document.addEventListener('touchcancel', () => {
-    if (!dashboardSwipe) return;
-    dashboardSwipe = null;
-    const track = $('#day-carousel-track'); track.style.transition = ''; track.style.transform = 'translateX(-100%)';
-  }, { passive: true });
   document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => { switchPage(button.dataset.page); closeMenuDrawer(); }));
   $('#export-button').addEventListener('click', exportSchedule);
   $('#select-amozeshyar-file').addEventListener('click', () => $('#amozeshyar-file').click());
@@ -1822,7 +1759,7 @@ function init() {
       else window.AndroidScheduleBridge?.exitApp?.();
     });
   }
-  render(); syncTermSettings(); setInterval(render, 15000);
+  render(); syncTermSettings(); setInterval(refreshClockAndStatuses, 15000);
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Offline support unavailable.', error)));
 }
 

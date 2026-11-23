@@ -29,18 +29,11 @@
       </section>
       <nav class="day-switch" aria-label="انتخاب روز">
         <button type="button" class="day-step" id="previous-day-button" aria-label="یک روز عقب"><img src="assets/icons/back.webp" alt="" aria-hidden="true"></button>
-        <button type="button" class="day-option active" data-day="today" aria-pressed="true"><span>امروز</span></button>
-        <button type="button" class="day-option date-option" id="pick-date-button" aria-haspopup="dialog" aria-controls="date-picker-dialog" aria-pressed="false"><span>تاریخ</span></button>
+        <button type="button" class="day-option date-option" id="pick-date-button" aria-haspopup="dialog" aria-controls="date-picker-dialog"><span>تاریخ</span></button>
         <button type="button" class="day-step next-day" id="next-day-button" aria-label="یک روز جلو"><img src="assets/icons/back.webp" alt="" aria-hidden="true"></button>
       </nav>
       <section class="schedule-section" aria-label="برنامهٔ کلاس‌ها">
-        <div id="day-carousel" class="day-carousel">
-          <div id="day-carousel-track" class="day-carousel-track">
-            <div id="schedule-list-next" class="schedule-list day-panel" aria-label="فردا"></div>
-            <div id="schedule-list" class="schedule-list day-panel" aria-live="polite"></div>
-            <div id="schedule-list-previous" class="schedule-list day-panel" aria-label="دیروز"></div>
-          </div>
-        </div>
+        <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
         <div id="empty-state" class="empty-state" hidden><p id="empty-title">امروز کلاسی ندارید</p><button type="button" class="empty-link page-link" data-page="courses">مدیریت درس‌ها</button></div>
       </section>
       <div class="quick-add" id="quick-add">
@@ -139,7 +132,7 @@
     <button class="menu-action page-link" type="button" data-page="courses">مدیریت درس‌ها</button>
     <button class="menu-action page-link" type="button" data-page="settings">تنظیمات</button>
     <button class="menu-action page-link" type="button" data-page="help">راهنما</button>
-    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">1.15.8</span></footer>
+    <footer class="app-footer">نسخهٔ <span id="drawer-app-version">1.15.9</span></footer>
   </dialog>
   <dialog id="date-picker-dialog" class="date-picker-dialog" aria-labelledby="calendar-title">
     <div class="dialog-heading"><h2 id="calendar-title">انتخاب تاریخ</h2><button type="button" class="icon-button close-calendar" aria-label="بستن"><img src="assets/icons/close.svg" width="24" height="24" alt="" aria-hidden="true"></button></div>

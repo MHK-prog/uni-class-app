@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.15.9';
+const APP_VERSION = '1.15.10';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -18,7 +18,6 @@ const ACCENT_COLORS = ['purple', 'blue', 'teal', 'green', 'orange', 'pink', 'red
 const $ = selector => document.querySelector(selector);
 let state = loadState();
 let selectedDateISO = targetDay(0).iso;
-let selectedDateFollowsToday = true;
 let toastTimer;
 let activeDetailsCourseId = '';
 let activeDetailsReturnPage = 'dashboard';
@@ -299,9 +298,10 @@ function openDatePicker(target) {
   calendarTarget = target;
   calendarDraftISO = target === 'term' ? state.cycle.termStartDate
     : target === 'event' ? (activeEventDraft?.date || selectedDateISO || targetDay(0).iso)
-      : targetDay(0).iso;
+      : (selectedDateISO || targetDay(0).iso);
   if (!isValidISODate(calendarDraftISO)) calendarDraftISO = targetDay(0).iso;
   calendarCursorISO = calendarDraftISO;
+  $('#calendar-today').hidden = target !== 'dashboard';
   $('#calendar-title').textContent = target === 'term' ? 'تاریخ شروع ترم' : target === 'event' ? 'تاریخ رویداد' : 'انتخاب تاریخ برنامه';
   renderCalendar();
   showAppModal($('#date-picker-dialog'));
@@ -483,17 +483,7 @@ function dashboardEntries(dateISO, now = new Date()) {
   return [...classes, ...events].sort((a, b) => a.start.localeCompare(b.start) || (a.type === 'event' ? a.event.title : a.course.title).localeCompare(b.type === 'event' ? b.event.title : b.course.title, 'fa'));
 }
 
-function renderDashboardPanel(dateISO, element, now = new Date()) {
-  const entries = dashboardEntries(dateISO, now);
-  element.replaceChildren(...entries.map(item => item.type === 'event'
-    ? createEventCard(item.event, item.status)
-    : createCourseCard(item.course, item.status, false, item.schedule)));
-  element.hidden = false;
-  return entries;
-}
-
 function render(now = new Date()) {
-  if (selectedDateFollowsToday) selectedDateISO = targetDay(0, now).iso;
   const info = selectedInfo(now), current = iranParts(now);
   $('#iran-clock').textContent = toFaDigits(`${String(current.hour).padStart(2, '0')}:${String(current.minute).padStart(2, '0')}`);
   $('#selected-date').textContent = info.shortFormatted;
@@ -501,8 +491,11 @@ function render(now = new Date()) {
   $('#cycle-week-label').textContent = parityLabel(info.weekIndex);
   $('#drawer-app-version').textContent = toFaDigits(APP_VERSION);
   const matching = dashboardEntries(info.iso, now);
-  renderDashboardPanel(info.iso, $('#schedule-list'), now);
-  $('#schedule-list').hidden = matching.length === 0;
+  const scheduleList = $('#schedule-list');
+  scheduleList.replaceChildren(...matching.map(item => item.type === 'event'
+    ? createEventCard(item.event, item.status)
+    : createCourseCard(item.course, item.status, false, item.schedule)));
+  scheduleList.hidden = matching.length === 0;
   $('#empty-title').textContent = info.isToday
     ? matching.length ? 'کلاس‌ها و رویدادهای امروز تمام شده‌اند' : 'امروز کلاسی ندارید'
     : `${info.weekday} ${info.shortFormatted} کلاسی ندارید`;
@@ -514,7 +507,6 @@ function render(now = new Date()) {
 
 function refreshClockAndStatuses(now = new Date()) {
   const current = iranParts(now), todayISO = targetDay(0, now).iso;
-  if (selectedDateFollowsToday && selectedDateISO !== todayISO) { render(now); return; }
   $('#iran-clock').textContent = toFaDigits(`${String(current.hour).padStart(2, '0')}:${String(current.minute).padStart(2, '0')}`);
   const selected = dateFromISO(selectedDateISO || todayISO);
   const isToday = selected.iso === todayISO, isPast = selected.iso < todayISO;
@@ -1029,7 +1021,6 @@ function removeCourse(id) {
 
 function stepDashboardDate(days) {
   selectedDateISO = shiftISODate(selectedDateISO || targetDay(0).iso, days);
-  selectedDateFollowsToday = selectedDateISO === targetDay(0).iso;
   render();
 }
 
@@ -1516,6 +1507,12 @@ function init() {
   $('#calendar-previous').addEventListener('click', () => { calendarCursorISO = shiftISODate(jalaliMonthStart(calendarCursorISO), -1); renderCalendar(); });
   $('#calendar-next').addEventListener('click', () => { calendarCursorISO = shiftISODate(jalaliMonthStart(calendarCursorISO), 40); renderCalendar(); });
   $('.close-calendar').addEventListener('click', () => $('#date-picker-dialog').close());
+  $('#calendar-today').addEventListener('click', () => {
+    if (calendarTarget !== 'dashboard') return;
+    selectedDateISO = targetDay(0).iso;
+    $('#date-picker-dialog').close();
+    render();
+  });
   $('#calendar-apply').addEventListener('click', () => {
     if (calendarTarget === 'term') {
       state.cycle = { termStartDate: calendarDraftISO };
@@ -1527,7 +1524,6 @@ function init() {
       refreshEventDetails();
     } else {
       selectedDateISO = calendarDraftISO;
-      selectedDateFollowsToday = selectedDateISO === targetDay(0).iso;
     }
     $('#date-picker-dialog').close();
     render();

@@ -307,7 +307,7 @@ button:active{transform:scale(.96)}
 .course-details-dialog::backdrop,.editor-dialog::backdrop,.date-picker-dialog::backdrop,.note-dialog::backdrop{background:rgba(0,0,0,0);transition:background-color .18s ease}
 .course-details-dialog[open]::backdrop,.editor-dialog[open]::backdrop,.date-picker-dialog[open]::backdrop,.note-dialog[open]::backdrop{background:rgba(0,0,0,.72)}
 @starting-style{.course-details-dialog[open],.editor-dialog[open],.date-picker-dialog[open],.note-dialog[open]{opacity:0;transform:translateY(8px) scale(.985)}.course-details-dialog[open]::backdrop,.editor-dialog[open]::backdrop,.date-picker-dialog[open]::backdrop,.note-dialog[open]::backdrop{background:rgba(0,0,0,0)}}
-.calendar-actions{justify-content:flex-end}
+.calendar-actions{justify-content:space-between}
 .settings-actions>.menu-action{width:100%;justify-content:flex-start}
 @media(max-width:370px){.day-context{gap:4px}.day-capsule{padding-inline:2px}.day-capsule small{font-size:9px}.day-capsule strong{font-size:11px}.day-switch{grid-template-columns:40px minmax(0,1fr) 40px;gap:4px}.day-step{width:40px}.details-row{grid-template-columns:82px minmax(0,1fr)}}
 @media(prefers-reduced-motion:reduce){button,.course-details-dialog,.editor-dialog,.date-picker-dialog,.note-dialog,.course-details-dialog::backdrop,.editor-dialog::backdrop,.date-picker-dialog::backdrop,.note-dialog::backdrop{transition:none!important;animation:none!important}}

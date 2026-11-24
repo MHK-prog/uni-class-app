@@ -55,8 +55,26 @@ jobs:
           echo "SIGNING_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Build signed APK
-        run: gradle --no-daemon assembleRelease
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon assembleRelease 2>&1 | tee gradle-build.log
         working-directory: android
+
+      - name: Add build errors to summary
+        if: failure()
+        shell: bash
+        run: |
+          {
+            echo '### Gradle build errors'
+            echo '```text'
+            if [ -f android/gradle-build.log ]; then
+              grep -E '^(e: |w: |FAILURE:|What went wrong:|Execution failed for task|> Task .* FAILED|Could not resolve|Could not find)' android/gradle-build.log | tail -n 80 || true
+            else
+              echo 'No Gradle output file was produced.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7

@@ -1,6 +1,6 @@
 package com.mhkprog.uniclass
 
-import android.icu.util.PersianCalendar
+import android.icu.util.Calendar
 import android.icu.util.ULocale
 import java.time.LocalDate
 import java.time.ZoneId
@@ -37,7 +37,7 @@ object PersianDates {
     fun toJalali(date: LocalDate): JalaliDate {
         val calendar = newCalendar()
         calendar.timeInMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-        return JalaliDate(calendar.get(PersianCalendar.YEAR), calendar.get(PersianCalendar.MONTH) + 1, calendar.get(PersianCalendar.DAY_OF_MONTH))
+        return JalaliDate(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1, calendar.get(Calendar.DAY_OF_MONTH))
     }
 
     fun fromJalali(year: Int, month: Int, day: Int): LocalDate {
@@ -46,9 +46,9 @@ object PersianDates {
         val calendar = newCalendar()
         calendar.clear()
         calendar.setLenient(false)
-        calendar.set(PersianCalendar.YEAR, year)
-        calendar.set(PersianCalendar.MONTH, month - 1)
-        calendar.set(PersianCalendar.DAY_OF_MONTH, day)
+        calendar.set(Calendar.YEAR, year)
+        calendar.set(Calendar.MONTH, month - 1)
+        calendar.set(Calendar.DAY_OF_MONTH, day)
         return java.time.Instant.ofEpochMilli(calendar.timeInMillis).atZone(ZoneOffset.UTC).toLocalDate()
     }
 
@@ -95,5 +95,5 @@ object PersianDates {
         return Math.floorMod(Math.floorDiv(days, 7), 2).toInt()
     }
 
-    private fun newCalendar() = PersianCalendar(TimeZone.getTimeZone("UTC"), ULocale("fa_IR"))
+    private fun newCalendar(): Calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"), ULocale("fa_IR@calendar=persian"))
 }

@@ -240,6 +240,8 @@ fun String.faDigits(): String = map { char -> when (char) {
     else -> char
 } }.joinToString("")
 
+fun Int.faDigits(): String = toString().faDigits()
+
 fun String.enDigits(): String = map { char -> when (char) {
     in '\u06f0'..'\u06f9' -> '0' + (char - '\u06f0')
     in '\u0660'..'\u0669' -> '0' + (char - '\u0660')

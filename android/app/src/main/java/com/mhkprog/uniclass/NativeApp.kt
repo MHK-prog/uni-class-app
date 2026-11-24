@@ -75,6 +75,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -159,6 +160,24 @@ private fun palette(theme: String, accent: String): NativePalette {
         live = color(0xFF43D6A5), done = color(0xFF68A8FF), danger = color(0xFFFF7785)
     )
 }
+
+private fun Typography.withFont(family: FontFamily) = Typography(
+    displayLarge = displayLarge.copy(fontFamily = family),
+    displayMedium = displayMedium.copy(fontFamily = family),
+    displaySmall = displaySmall.copy(fontFamily = family),
+    headlineLarge = headlineLarge.copy(fontFamily = family),
+    headlineMedium = headlineMedium.copy(fontFamily = family),
+    headlineSmall = headlineSmall.copy(fontFamily = family),
+    titleLarge = titleLarge.copy(fontFamily = family),
+    titleMedium = titleMedium.copy(fontFamily = family),
+    titleSmall = titleSmall.copy(fontFamily = family),
+    bodyLarge = bodyLarge.copy(fontFamily = family),
+    bodyMedium = bodyMedium.copy(fontFamily = family),
+    bodySmall = bodySmall.copy(fontFamily = family),
+    labelLarge = labelLarge.copy(fontFamily = family),
+    labelMedium = labelMedium.copy(fontFamily = family),
+    labelSmall = labelSmall.copy(fontFamily = family)
+)
 
 @Composable
 fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
@@ -270,7 +289,7 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
 
     androidx.compose.runtime.CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         val vazirFamily = remember { FontFamily(Font(R.font.vazirmatn_regular, FontWeight.Normal)) }
-        MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography.copy(defaultFontFamily = vazirFamily)) {
+        MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography.withFont(vazirFamily)) {
             Surface(Modifier.fillMaxSize(), color = colors.background) {
                 Box(Modifier.fillMaxSize()) {
         Column(
@@ -296,7 +315,7 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
                                     onManageCourses = { navigate(NativeRoute.Courses) },
                                     onAddCourse = { navigate(NativeRoute.CourseEditor(null)) },
                                     onAddEvent = { eventDraft = EventDraft(date = PersianDates.parseIso(selectedDateIso)) },
-                                    onEvent = { event -> eventDraft = event.toDraft() }
+                                    onEvent = { event -> eventDraft = event }
                                 )
                                 NativeRoute.Courses -> CoursesPage(
                                     courses = state.courses, colors = colors,

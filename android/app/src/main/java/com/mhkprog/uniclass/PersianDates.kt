@@ -52,10 +52,14 @@ object PersianDates {
         return java.time.Instant.ofEpochMilli(calendar.timeInMillis).atZone(ZoneOffset.UTC).toLocalDate()
     }
 
-    fun daysInMonth(year: Int, month: Int): Int = if (month <= 6) 31 else if (month <= 11) 30 else {
-        val currentStart = fromJalali(year, month, 1)
-        val nextStart = fromJalali(if (month == 12) year + 1 else year, if (month == 12) 1 else month + 1, 1)
-        ChronoUnit.DAYS.between(currentStart, nextStart).toInt()
+    fun daysInMonth(year: Int, month: Int): Int {
+        require(month in 1..12)
+        val calendar = newCalendar()
+        calendar.clear()
+        calendar.set(Calendar.YEAR, year)
+        calendar.set(Calendar.MONTH, month - 1)
+        calendar.set(Calendar.DAY_OF_MONTH, 1)
+        return calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
     }
 
     fun shiftJalaliMonth(date: LocalDate, offset: Int): LocalDate {

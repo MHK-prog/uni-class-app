@@ -129,6 +129,8 @@ private sealed class NativeRoute {
     data class Collection(val courseId: String, val type: CollectionType) : NativeRoute()
 }
 
+private const val GUIDE_URL = "https://storyboxs.ir/guides/aclass/guide.html"
+
 private enum class CollectionType { LINKS, SCHEDULE, NOTES }
 private data class FieldEditor(val courseId: String, val field: String)
 private data class DateDialogState(val selected: LocalDate, val onChoose: (LocalDate) -> Unit)
@@ -375,7 +377,10 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
                                         store.update { it.copy(preferences = it.preferences.copy(alarmMinutesBefore = minutes)) }
                                     }
                                 )
-                                NativeRoute.Help -> HelpPage(colors)
+                                NativeRoute.Help -> HelpPage(colors) {
+                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GUIDE_URL))) }
+                                        .onFailure { toastText = "راهنمای آنلاین باز نشد." }
+                                }
                                 NativeRoute.Import -> ImportPage(
                                     store = store, colors = colors,
                                     selectedFile = selectedMht,
@@ -884,9 +889,14 @@ private fun ChoiceChip(label: String, selected: Boolean, colors: NativePalette, 
 }
 
 @Composable
-private fun HelpPage(colors: NativePalette) {
+private fun HelpPage(colors: NativePalette, onOpenGuide: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("راهنما", color = colors.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 7.dp, bottom = 3.dp))
+        Button(onClick = onOpenGuide, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), colors = ButtonDefaults.buttonColors(containerColor = colors.accent), shape = RoundedCornerShape(13.dp)) {
+            Icon(Icons.Filled.Link, null, tint = Color.White, modifier = Modifier.size(21.dp))
+            Spacer(Modifier.width(7.dp))
+            Text("مشاهدهٔ راهنمای کامل", fontSize = 15.sp)
+        }
         HelpCard("دیدن برنامهٔ روزانه", "با پیکان‌ها بین روزها جابه‌جا شوید یا «انتخاب تاریخ» را بزنید. هر جلسهٔ درس کارت جداگانه دارد و وضعیت آن با رنگ مشخص می‌شود.", colors)
         HelpCard("افزودن درس و زمان", "از منو به مدیریت درس‌ها بروید و درس را بسازید. از جزئیات درس، بخش زمان‌های برگزاری را باز کنید و برای هر هفته، روز و ساعت جداگانه اضافه کنید.", colors)
         HelpCard("لینک و یادداشت", "در جزئیات هر درس می‌توانید لینک‌های موردنیاز و یادداشت‌های خودتان را ثبت، ویرایش یا حذف کنید.", colors)

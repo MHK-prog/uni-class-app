@@ -3,7 +3,9 @@
 package com.mhkprog.uniclass
 
 import android.app.Activity
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.view.View
@@ -73,6 +75,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Typography
@@ -119,6 +122,7 @@ private sealed class NativeRoute {
     data object Dashboard : NativeRoute()
     data object Courses : NativeRoute()
     data object Settings : NativeRoute()
+    data object Alarms : NativeRoute()
     data object Help : NativeRoute()
     data object Import : NativeRoute()
     data class CourseEditor(val courseId: String?) : NativeRoute()
@@ -264,6 +268,21 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
             selectedMht = SelectedMht(uri.lastPathSegment?.substringAfterLast('/') ?: "schedule.mht", bytes)
         }.onFailure { toastText = "خواندن فایل انجام نشد." }
     }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val exactAllowed = ClassAlarmScheduler.requestExactAlarmAccess(context)
+            ClassAlarmScheduler.sync(context, store.state)
+            toastText = if (exactAllowed) "زنگ هشدار کلاس‌ها فعال شد."
+            else "زنگ فعال شد؛ برای دقیق‌تر شدن زمان، اجازهٔ زنگ دقیق را هم فعال کنید."
+        } else {
+            store.update { it.copy(preferences = it.preferences.copy(classAlarmsEnabled = false)) }
+            toastText = "برای زنگ هشدار، اجازهٔ اعلان را فعال کنید."
+        }
+    }
+
+    LaunchedEffect(state) {
+        ClassAlarmScheduler.sync(context, state)
+    }
 
     val scheme = if (state.preferences.theme == "light") lightColorScheme(
         primary = colors.accent, onPrimary = Color.White, background = colors.background,
@@ -334,6 +353,28 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
                                     onRestore = { restoreLauncher.launch(arrayOf("application/json", "text/json", "application/octet-stream")) },
                                     onImport = { navigate(NativeRoute.Import) }
                                 )
+                                NativeRoute.Alarms -> AlarmSettingsPage(
+                                    state = state,
+                                    colors = colors,
+                                    onEnabled = { enabled ->
+                                        store.update { it.copy(preferences = it.preferences.copy(classAlarmsEnabled = enabled)) }
+                                        if (enabled) {
+                                            if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                            } else {
+                                                val exactAllowed = ClassAlarmScheduler.requestExactAlarmAccess(context)
+                                                ClassAlarmScheduler.sync(context, store.state)
+                                                toastText = if (exactAllowed) "زنگ هشدار کلاس‌ها فعال شد."
+                                                else "زنگ فعال شد؛ برای دقیق‌تر شدن زمان، اجازهٔ زنگ دقیق را هم فعال کنید."
+                                            }
+                                        } else {
+                                            toastText = "زنگ هشدار کلاس‌ها خاموش شد."
+                                        }
+                                    },
+                                    onMinutesBefore = { minutes ->
+                                        store.update { it.copy(preferences = it.preferences.copy(alarmMinutesBefore = minutes)) }
+                                    }
+                                )
                                 NativeRoute.Help -> HelpPage(colors)
                                 NativeRoute.Import -> ImportPage(
                                     store = store, colors = colors,
@@ -382,6 +423,7 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
                                     onDashboard = { changePage(NativeRoute.Dashboard) },
                                     onCourses = { changePage(NativeRoute.Courses) },
                                     onSettings = { changePage(NativeRoute.Settings) },
+                                    onAlarms = { changePage(NativeRoute.Alarms) },
                                     onHelp = { changePage(NativeRoute.Help) }
                                 )
                             }
@@ -490,7 +532,7 @@ private fun AppIcon(resource: Int, description: String?, modifier: Modifier = Mo
 @Composable
 private fun DrawerPanel(
     colors: NativePalette, onClose: () -> Unit, onDashboard: () -> Unit,
-    onCourses: () -> Unit, onSettings: () -> Unit, onHelp: () -> Unit
+    onCourses: () -> Unit, onSettings: () -> Unit, onAlarms: () -> Unit, onHelp: () -> Unit
 ) {
     Column(
         Modifier.fillMaxHeight().widthIn(min = 250.dp, max = 340.dp).fillMaxWidth(0.78f)
@@ -506,6 +548,7 @@ private fun DrawerPanel(
                 }
                 DrawerItem("برنامه", colors, onDashboard)
                 DrawerItem("مدیریت درس‌ها", colors, onCourses)
+                DrawerItem("زنگ هشدار", colors, onAlarms)
                 DrawerItem("تنظیمات", colors, onSettings)
                 DrawerItem("راهنما", colors, onHelp)
                 Spacer(Modifier.weight(1f))
@@ -759,6 +802,51 @@ private fun SettingsPage(
     }
 }
 
+@Composable
+private fun AlarmSettingsPage(
+    state: AppState,
+    colors: NativePalette,
+    onEnabled: (Boolean) -> Unit,
+    onMinutesBefore: (Int) -> Unit
+) {
+    val enabled = state.preferences.classAlarmsEnabled
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(15.dp)
+    ) {
+        Text("زنگ هشدار", color = colors.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 7.dp))
+        SettingsGroup("یادآوری کلاس‌ها", colors) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("فعال کردن زنگ", color = colors.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text("برای همهٔ جلسه‌های ثبت‌شده", color = colors.muted, fontSize = 12.sp)
+                }
+                Switch(checked = enabled, onCheckedChange = onEnabled)
+            }
+            Text("برای نمایش زنگ، اجازهٔ اعلان را در گوشی فعال کنید.", color = colors.muted, fontSize = 13.sp)
+        }
+        SettingsGroup("زمان یادآوری پیش از کلاس", colors) {
+            listOf(5, 10, 15, 30, 60).forEach { minutes ->
+                Row(
+                    Modifier.fillMaxWidth().clickable(enabled = enabled) { onMinutesBefore(minutes) }.padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = state.preferences.alarmMinutesBefore == minutes,
+                        onClick = { onMinutesBefore(minutes) },
+                        enabled = enabled
+                    )
+                    Text(
+                        if (minutes == 60) "یک ساعت قبل" else "${minutes.faDigits()} دقیقه قبل",
+                        color = if (enabled) colors.text else colors.muted,
+                        fontSize = 15.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
 private fun accentLabel(name: String) = when (name) {
     "blue" -> "آبی"; "teal" -> "فیروزه‌ای"; "green" -> "سبز"; "orange" -> "نارنجی"; "pink" -> "صورتی"; "red" -> "قرمز"; else -> "بنفش"
 }
@@ -803,6 +891,7 @@ private fun HelpPage(colors: NativePalette) {
         HelpCard("افزودن درس و زمان", "از منو به مدیریت درس‌ها بروید و درس را بسازید. از جزئیات درس، بخش زمان‌های برگزاری را باز کنید و برای هر هفته، روز و ساعت جداگانه اضافه کنید.", colors)
         HelpCard("لینک و یادداشت", "در جزئیات هر درس می‌توانید لینک‌های موردنیاز و یادداشت‌های خودتان را ثبت، ویرایش یا حذف کنید.", colors)
         HelpCard("رویدادها", "دکمهٔ + پایین برنامه را بزنید، رویداد را انتخاب کنید و عنوان، تاریخ، ساعت یا توضیحات را وارد کنید.", colors)
+        HelpCard("زنگ هشدار کلاس", "از منو وارد بخش زنگ هشدار شوید، یادآوری را روشن کنید و انتخاب کنید چند دقیقه پیش از شروع کلاس اعلان دریافت کنید.", colors)
         HelpCard("پشتیبان و آموزشیار", "در تنظیمات می‌توانید از اطلاعات فایل پشتیبان بگیرید یا آن را بازیابی کنید. فایل MHT آموزشیار هم از همان صفحه قابل وارد کردن است.", colors)
         HelpCard("هفتهٔ فرد و زوج", "هفتهٔ شروع ترم هفتهٔ فرد است. برنامه، هفته‌های بعد را با فاصله‌های هفت‌روزه به‌صورت زوج و فرد حساب می‌کند.", colors)
     }

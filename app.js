@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.16.1';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -1035,13 +1035,13 @@ function showToast(message) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
 }
 
-function makeBackupFilename(prefix = 'class-schedule-backup') {
+function makeBackupFilename(prefix = 'eclass-backup') {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   return prefix + '-' + stamp + '.json';
 }
 
 function backupPayload() {
-  return JSON.stringify({ formatVersion: 8, cycle: state.cycle, courses: state.courses, events: state.events, preferences: state.preferences }, null, 2);
+  return JSON.stringify({ formatVersion: 9, cycle: state.cycle, courses: state.courses, events: state.events, preferences: state.preferences }, null, 2);
 }
 
 function downloadBackup(payload, filename) {
@@ -1070,7 +1070,7 @@ window.onScheduleBackupResult = saved => {
 
 async function saveBackupBeforeImport() {
   if (!state.courses.length) return true;
-  const payload = backupPayload(), filename = makeBackupFilename('class-schedule-before-amozeshyar-import');
+  const payload = backupPayload(), filename = makeBackupFilename('eclass-before-amozeshyar-import');
   if (window.AndroidScheduleBridge?.saveBackupForImport) {
     return new Promise(resolve => {
       const timeout = setTimeout(() => {

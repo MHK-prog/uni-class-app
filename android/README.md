@@ -1,6 +1,6 @@
-# Android application
+# ایکلاس برای اندروید
 
-The Android app is a native Kotlin and Jetpack Compose application. It does not load the website in a WebView. It includes the Vazirmatn font and keeps courses, meetings, notes, links, events, and preferences on the device.
+ایکلاس یک برنامهٔ بومی Kotlin و Jetpack Compose است و سایت را در WebView باز نمی‌کند. فونت وزیر داخل برنامه است و درس‌ها، زمان‌ها، یادداشت‌ها، پیوندها، رویدادها و تنظیمات را روی دستگاه نگه می‌دارد. از منوی برنامه می‌توانید زنگ هشدار کلاس‌ها را روشن کنید و زمان یادآوری را انتخاب کنید.
 
 The minimum Android version is Android 7 (API 24). GitHub Actions builds and signs a release APK on pushes to `main`. Configure these repository Actions secrets:
 

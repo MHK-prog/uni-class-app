@@ -22,4 +22,9 @@ class MainActivity : ComponentActivity() {
             EClassApp(store = store, onExit = ::finish)
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        if (::store.isInitialized) ClassAlarmScheduler.sync(applicationContext, store.state)
+    }
 }

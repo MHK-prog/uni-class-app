@@ -79,7 +79,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: class-schedule-android
+          name: eclass-android
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
@@ -91,7 +91,7 @@ jobs:
         run: |
           version=$(sed -n "s/^const APP_VERSION = '\(.*\)';/\1/p" app.js)
           gh release create "android-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}" \
-            android/app/build/outputs/apk/release/app-release.apk#class-schedule.apk \
+            android/app/build/outputs/apk/release/app-release.apk#eclass.apk \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "ایکلاس برای اندروید $version" \

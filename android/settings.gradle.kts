@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ClassSchedule"
+rootProject.name = "ایکلاس"
 include(":app")

@@ -29,7 +29,12 @@ data class ScheduleEvent(
     val id: String = newId(), val title: String, val date: String,
     val start: String = "", val end: String = "", val description: String = ""
 )
-data class AppPreferences(val theme: String = "dark", val accent: String = "purple")
+data class AppPreferences(
+    val theme: String = "dark",
+    val accent: String = "purple",
+    val classAlarmsEnabled: Boolean = false,
+    val alarmMinutesBefore: Int = 10
+)
 data class AppState(
     val termStartDate: String = PersianDates.currentSaturdayISO(),
     val courses: List<Course> = emptyList(),
@@ -105,7 +110,9 @@ class ScheduleStore(context: Context) {
         },
         preferences = AppPreferences(
             theme = if (input.preferences.theme == "light") "light" else "dark",
-            accent = input.preferences.accent.takeIf { it in accentNames } ?: "purple"
+            accent = input.preferences.accent.takeIf { it in accentNames } ?: "purple",
+            classAlarmsEnabled = input.preferences.classAlarmsEnabled,
+            alarmMinutesBefore = input.preferences.alarmMinutesBefore.coerceIn(5, 60)
         )
     )
 
@@ -184,7 +191,12 @@ class ScheduleStore(context: Context) {
             val appearance = root.optJSONObject("preferences") ?: JSONObject()
             return AppState(
                 termStartDate = term, courses = courses, events = events,
-                preferences = AppPreferences(appearance.optString("theme", "dark"), appearance.optString("accent", "purple"))
+                preferences = AppPreferences(
+                    theme = appearance.optString("theme", "dark"),
+                    accent = appearance.optString("accent", "purple"),
+                    classAlarmsEnabled = appearance.optBoolean("classAlarmsEnabled", false),
+                    alarmMinutesBefore = appearance.optInt("alarmMinutesBefore", 10)
+                )
             )
         }
 
@@ -211,10 +223,14 @@ class ScheduleStore(context: Context) {
                 events.put(JSONObject().put("id", event.id).put("title", event.title).put("date", event.date)
                     .put("start", event.start).put("end", event.end).put("description", event.description))
             }
-            return JSONObject().put("formatVersion", 8)
+            return JSONObject().put("formatVersion", 9)
                 .put("cycle", JSONObject().put("termStartDate", state.termStartDate))
                 .put("courses", courses).put("events", events)
-                .put("preferences", JSONObject().put("theme", state.preferences.theme).put("accent", state.preferences.accent))
+                .put("preferences", JSONObject()
+                    .put("theme", state.preferences.theme)
+                    .put("accent", state.preferences.accent)
+                    .put("classAlarmsEnabled", state.preferences.classAlarmsEnabled)
+                    .put("alarmMinutesBefore", state.preferences.alarmMinutesBefore))
         }
 
         private fun normalizeDay(raw: String): String = when (

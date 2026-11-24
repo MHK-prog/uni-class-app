@@ -384,7 +384,7 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
                                 NativeRoute.Import -> ImportPage(
                                     store = store, colors = colors,
                                     selectedFile = selectedMht,
-                                    onPickFile = { mhtLauncher.launch(arrayOf("application/x-mimearchive", "message/rfc822", "text/html", "application/octet-stream")) },
+                                    onPickFile = { mhtLauncher.launch(arrayOf("*/*")) },
                                     onBackupRestore = { restoreLauncher.launch(arrayOf("application/json", "text/json", "application/octet-stream")) },
                                     toast = { toastText = it }
                                 )

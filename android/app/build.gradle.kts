@@ -8,7 +8,7 @@ val releaseStorePath = providers.environmentVariable("SIGNING_KEYSTORE_PATH").or
 val releaseStorePassword = providers.environmentVariable("SIGNING_KEYSTORE_PASSWORD").orNull
 val releaseAlias = providers.environmentVariable("SIGNING_KEY_ALIAS").orNull
 val releaseKeyPassword = providers.environmentVariable("SIGNING_KEY_PASSWORD").orNull
-val appVersion = providers.environmentVariable("APP_VERSION").orElse("1.16.2").get()
+val appVersion = providers.environmentVariable("APP_VERSION").orElse("1.16.3").get()
 val buildNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull() ?: 3
 val releaseSigningReady = !releaseStorePath.isNullOrBlank() &&
     !releaseStorePassword.isNullOrBlank() && !releaseAlias.isNullOrBlank() &&
@@ -47,7 +47,9 @@ android {
 
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             signingConfig = if (releaseSigningReady) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }

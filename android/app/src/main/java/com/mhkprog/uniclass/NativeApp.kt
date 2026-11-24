@@ -1185,7 +1185,7 @@ private fun ImportPage(
                     }
                 }
             }
-            Button(onClick = { confirmImport = true }, enabled = !needsChoice, Modifier.fillMaxWidth().heightIn(min = 52.dp),
+            Button(onClick = { confirmImport = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), enabled = !needsChoice,
                 colors = ButtonDefaults.buttonColors(containerColor = colors.accent, disabledContainerColor = colors.panel2), shape = RoundedCornerShape(13.dp)) {
                 AppIcon(R.drawable.ic_check_native, null, Modifier.size(23.dp)); Spacer(Modifier.width(7.dp)); Text("وارد کردن برنامه", fontSize = 16.sp)
             }

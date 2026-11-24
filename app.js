@@ -2,7 +2,7 @@
 
 const TIME_ZONE = 'Asia/Tehran';
 // Keep in sync with APP_VERSION in sw.js.
-const APP_VERSION = '1.15.10';
+const APP_VERSION = '1.15.11';
 const STORAGE_KEY = 'class-schedule-app-v1';
 const DAYS = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
 const WEEK_DAY_ORDER = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -870,9 +870,9 @@ function openMenuDrawer(dragOffset = null, dragWidth = null) {
   $('#menu-button').setAttribute('aria-expanded', 'true');
   drawer.classList.remove('drawer-entering');
   const width = dragWidth || Math.min(window.innerWidth * 0.75, 420);
-  const offset = Math.max(0, width + dragOffset);
+  const offset = Math.min(0, -width + dragOffset);
   drawer.style.transform = `translate3d(${offset}px, 0, 0)`;
-  setDrawerBackdropOpacity(drawer, 1 - Math.min(width, offset) / width, width);
+  setDrawerBackdropOpacity(drawer, 1 - Math.min(width, Math.abs(offset)) / width, width);
 }
 
 function setDrawerBackdropOpacity(drawer, progress = null, width = Math.min(window.innerWidth * 0.75, 420)) {
@@ -880,27 +880,27 @@ function setDrawerBackdropOpacity(drawer, progress = null, width = Math.min(wind
     width = width || 1;
     const match = drawer.style.transform.match(/translate(?:3d|X)\((-?[\d.]+)px/);
     const offset = match ? Number(match[1]) : 0;
-    progress = 1 - Math.max(0, Math.min(width, offset)) / width;
+    progress = 1 - Math.min(width, Math.abs(offset)) / width;
   }
   drawer.style.setProperty('--drawer-backdrop-opacity', String(Math.max(0, Math.min(1, progress)) * 0.62));
 }
 
 function moveMenuDrawer(delta, opening, width) {
   const drawer = $('#menu-drawer');
-  if (!drawer.open && opening && delta < -6) openMenuDrawer(delta, width);
+  if (!drawer.open && opening && delta > 6) openMenuDrawer(delta, width);
   if (!drawer.open) return;
   drawer.classList.add('drawer-dragging');
-  const offset = opening ? width + delta : delta;
-  const clampedOffset = Math.max(0, Math.min(width, offset));
+  const offset = opening ? -width + delta : delta;
+  const clampedOffset = Math.max(-width, Math.min(0, offset));
   drawer.style.transform = `translate3d(${clampedOffset}px, 0, 0)`;
-  setDrawerBackdropOpacity(drawer, 1 - clampedOffset / width, width);
+  setDrawerBackdropOpacity(drawer, 1 - Math.abs(clampedOffset) / width, width);
 }
 
 function settleMenuDrawer(open) {
   const drawer = $('#menu-drawer');
   if (!drawer.open) return;
   drawer.classList.remove('drawer-dragging', 'drawer-entering', 'drawer-closing');
-  drawer.style.transform = open ? 'translateX(0)' : 'translateX(100%)';
+  drawer.style.transform = open ? 'translateX(0)' : 'translateX(-100%)';
   setDrawerBackdropOpacity(drawer, open ? 1 : 0);
   if (open) {
     drawer.style.removeProperty('transform');
@@ -917,7 +917,7 @@ function closeMenuDrawer(immediate = false) {
   drawer.classList.remove('drawer-dragging', 'drawer-entering');
   if (immediate) { drawer.close(); return; }
   drawer.classList.add('drawer-closing');
-  drawer.style.transform = 'translateX(100%)';
+  drawer.style.transform = 'translateX(-100%)';
   setDrawerBackdropOpacity(drawer, 0);
   drawerCloseTimer = setTimeout(() => { if (drawer.open) drawer.close(); }, 280);
 }
@@ -1022,6 +1022,12 @@ function removeCourse(id) {
 function stepDashboardDate(days) {
   selectedDateISO = shiftISODate(selectedDateISO || targetDay(0).iso, days);
   render();
+  const changedView = $('#schedule-list').hidden ? $('#empty-state') : $('#schedule-list');
+  const animationClass = days > 0 ? 'day-change-next' : 'day-change-previous';
+  changedView.classList.remove('day-change-next', 'day-change-previous');
+  void changedView.offsetWidth;
+  changedView.classList.add(animationClass);
+  changedView.addEventListener('animationend', () => changedView.classList.remove(animationClass), { once: true });
 }
 
 function showToast(message) {
@@ -1597,9 +1603,53 @@ function init() {
     });
   });
   const moveGesture = (gesture, delta) => {
-    if (gesture.open) { if (delta > 0) moveMenuDrawer(delta, false, gesture.width); }
-    else if (delta < 0) moveMenuDrawer(delta, true, gesture.width);
+    if (gesture.open) { if (delta < 0) moveMenuDrawer(delta, false, gesture.width); }
+    else if (delta > 0) moveMenuDrawer(delta, true, gesture.width);
   };
+  let dashboardSwipe = null, suppressedDashboardTap = null;
+  document.addEventListener('touchstart', event => {
+    if (event.touches.length !== 1 || $('#menu-drawer').open || !event.target.closest('#schedule-section')) {
+      dashboardSwipe = null;
+      return;
+    }
+    const touch = event.touches[0];
+    if (touch.clientX <= 28 || touch.clientX >= window.innerWidth - 28 || event.target.closest('button,a,input,select,textarea')) {
+      dashboardSwipe = null;
+      return;
+    }
+    dashboardSwipe = { x: touch.clientX, y: touch.clientY, started: performance.now(), axis: '' };
+  }, { passive: true });
+  document.addEventListener('touchmove', event => {
+    if (!dashboardSwipe || event.touches.length !== 1) return;
+    const touch = event.touches[0], dx = touch.clientX - dashboardSwipe.x, dy = touch.clientY - dashboardSwipe.y;
+    if (!dashboardSwipe.axis) {
+      if (Math.abs(dx) >= 16 && Math.abs(dx) > Math.abs(dy) * 1.25) dashboardSwipe.axis = 'horizontal';
+      else if (Math.abs(dy) >= 20 && Math.abs(dy) > Math.abs(dx) * 1.15) { dashboardSwipe = null; return; }
+    }
+    if (dashboardSwipe.axis === 'horizontal' && event.cancelable) event.preventDefault();
+  }, { passive: false });
+  document.addEventListener('touchend', event => {
+    if (!dashboardSwipe) return;
+    const gesture = dashboardSwipe, touch = event.changedTouches[0];
+    dashboardSwipe = null;
+    const dx = touch.clientX - gesture.x, dy = Math.abs(touch.clientY - gesture.y);
+    const elapsed = Math.max(1, performance.now() - gesture.started), distance = Math.abs(dx);
+    if (gesture.axis === 'horizontal' && dy < 90 && (distance >= 52 || (distance >= 28 && distance / elapsed > 0.5))) {
+      const tap = { x: touch.clientX, y: touch.clientY, until: performance.now() + 350 };
+      suppressedDashboardTap = tap;
+      setTimeout(() => { if (suppressedDashboardTap === tap) suppressedDashboardTap = null; }, 400);
+      stepDashboardDate(dx > 0 ? 1 : -1);
+    }
+  }, { passive: true });
+  document.addEventListener('touchcancel', () => { dashboardSwipe = null; }, { passive: true });
+  document.addEventListener('click', event => {
+    if (!suppressedDashboardTap || !event.target.closest('#schedule-section')) return;
+    const tap = suppressedDashboardTap;
+    suppressedDashboardTap = null;
+    if (performance.now() >= tap.until || event.detail === 0 || Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 40) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
   document.addEventListener('touchstart', event => {
     if (event.touches.length !== 1) {
       cancelAnimationFrame(gestureFrame); gestureFrame = 0;
@@ -1609,11 +1659,11 @@ function init() {
       return;
     }
     const touch = event.touches[0], drawer = $('#menu-drawer');
-    const fromRightEdge = touch.clientX >= window.innerWidth - 24 && !event.target.closest('input,select,textarea');
+    const fromLeftEdge = touch.clientX <= 24 && !event.target.closest('input,select,textarea');
     const open = drawer.open;
     const width = open ? Math.max(1, drawer.offsetWidth) : Math.max(1, Math.min(window.innerWidth * 0.75, 420));
     horizontalGesture = open ? (drawer.contains(event.target) ? { x: touch.clientX, y: touch.clientY, open, width, started: performance.now() } : null)
-      : fromRightEdge ? { x: touch.clientX, y: touch.clientY, open, width, started: performance.now() } : null;
+      : fromLeftEdge ? { x: touch.clientX, y: touch.clientY, open, width, started: performance.now() } : null;
   }, { passive: true });
   document.addEventListener('touchmove', event => {
     if (!horizontalGesture || event.touches.length !== 1) return;
@@ -1639,13 +1689,13 @@ function init() {
     moveGesture(gesture, dx);
     const elapsed = Math.max(1, performance.now() - gesture.started), velocity = dx / elapsed;
     if (dy < 100 && !gesture.open) {
-      const shouldOpen = dx <= -48 || (dx <= -24 && velocity < -0.45);
+      const shouldOpen = dx >= 48 || (dx >= 24 && velocity > 0.45);
       if (shouldOpen) suppressBackdropClickAt(touch);
       if ($('#menu-drawer').open && $('#menu-drawer').classList.contains('drawer-dragging')) settleMenuDrawer(shouldOpen);
       else if ($('#menu-drawer').open) settleMenuDrawer(true);
       else if (shouldOpen) openMenuDrawer();
     } else if (dy < 100 && gesture.open) {
-      const shouldClose = dx / gesture.width > 0.28 || velocity > 0.45;
+      const shouldClose = dx / gesture.width < -0.28 || velocity < -0.45;
       if ($('#menu-drawer').classList.contains('drawer-dragging')) settleMenuDrawer(!shouldClose);
       else if (shouldClose) closeMenuDrawer();
     } else if (gesture.open) settleMenuDrawer(true);

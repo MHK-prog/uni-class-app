@@ -1,5 +1,5 @@
 // Keep in sync with APP_VERSION in app.js.
-const APP_VERSION = '1.16.4';
+const APP_VERSION = '1.16.5';
 const CACHE_PREFIX = 'class-schedule-static-';
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}`;
 const ASSETS = [

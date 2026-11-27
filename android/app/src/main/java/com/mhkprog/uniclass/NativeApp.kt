@@ -82,9 +82,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -1663,6 +1665,7 @@ private fun ScheduleDialog(draft: ScheduleEditor, colors: NativePalette, onDismi
     var day by remember(draft.oldWeek, draft.oldMeeting) { mutableStateOf(draft.day) }
     var start by remember(draft.oldWeek, draft.oldMeeting) { mutableStateOf(draft.start) }
     var end by remember(draft.oldWeek, draft.oldMeeting) { mutableStateOf(draft.end) }
+    var timePickerTarget by remember(draft.oldWeek, draft.oldMeeting) { mutableStateOf<String?>(null) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxWidth().padding(horizontal = 17.dp).widthIn(max = 480.dp), color = colors.panel, shape = RoundedCornerShape(19.dp), border = BorderStroke(1.dp, colors.line)) {
             Column(Modifier.heightIn(max = 700.dp).verticalScroll(rememberScrollState()).padding(17.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
@@ -1687,12 +1690,78 @@ private fun ScheduleDialog(draft: ScheduleEditor, colors: NativePalette, onDismi
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(start, { start = it.faDigits().take(5) }, Modifier.weight(1f), label = { Text("از ساعت") }, singleLine = true)
-                    OutlinedTextField(end, { end = it.faDigits().take(5) }, Modifier.weight(1f), label = { Text("تا ساعت") }, singleLine = true)
+                    ScheduleTimeChoice("شروع", start, colors, Modifier.weight(1f)) { timePickerTarget = "start" }
+                    ScheduleTimeChoice("پایان", end, colors, Modifier.weight(1f)) { timePickerTarget = "end" }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = onDismiss, Modifier.weight(1f).heightIn(min = 48.dp), border = BorderStroke(1.dp, colors.line)) { Text("لغو", color = colors.text) }
                     Button(onClick = { onSave(draft.copy(week = week, day = day, start = start, end = end)) }, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColors(containerColor = colors.accent)) { AppIcon(R.drawable.ic_check_native, null, Modifier.size(22.dp)); Spacer(Modifier.width(5.dp)); Text("ذخیره") }
+                }
+            }
+        }
+    }
+    if (timePickerTarget == "start") {
+        ScheduleTimePickerDialog(
+            currentTime = start, fallbackHour = 8, title = "انتخاب ساعت شروع", colors = colors,
+            onDismiss = { timePickerTarget = null },
+            onConfirm = { start = it; timePickerTarget = null }
+        )
+    }
+    if (timePickerTarget == "end") {
+        ScheduleTimePickerDialog(
+            currentTime = end, fallbackHour = 9, title = "انتخاب ساعت پایان", colors = colors,
+            onDismiss = { timePickerTarget = null },
+            onConfirm = { end = it; timePickerTarget = null }
+        )
+    }
+}
+
+@Composable
+private fun ScheduleTimeChoice(label: String, time: String, colors: NativePalette, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick, modifier = modifier.heightIn(min = 72.dp),
+        shape = RoundedCornerShape(14.dp), color = colors.panel2,
+        border = BorderStroke(1.dp, if (time.isBlank()) colors.line else colors.accent.copy(alpha = 0.55f))
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 9.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(label, color = colors.muted, fontSize = 12.sp)
+            Text(time.ifBlank { "انتخاب ساعت" }, color = if (time.isBlank()) colors.accentSoft else colors.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun ScheduleTimePickerDialog(
+    currentTime: String, fallbackHour: Int, title: String, colors: NativePalette,
+    onDismiss: () -> Unit, onConfirm: (String) -> Unit
+) {
+    val parts = currentTime.enDigits().split(":")
+    val pickerState = rememberTimePickerState(
+        initialHour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: fallbackHour,
+        initialMinute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0,
+        is24Hour = true
+    )
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            Modifier.fillMaxWidth().padding(horizontal = 22.dp).widthIn(max = 420.dp),
+            color = colors.panel, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, colors.line)
+        ) {
+            Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, Modifier.weight(1f), color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onDismiss) { AppIcon(R.drawable.ic_close_native, "بستن", Modifier.size(26.dp)) }
+                }
+                TimePicker(state = pickerState)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onDismiss, Modifier.weight(1f).heightIn(min = 48.dp), border = BorderStroke(1.dp, colors.line)) {
+                        Text("لغو", color = colors.text)
+                    }
+                    Button(onClick = {
+                        val time = "${pickerState.hour.toString().padStart(2, '0')}:${pickerState.minute.toString().padStart(2, '0')}".faDigits()
+                        onConfirm(time)
+                    }, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColors(containerColor = colors.accent)) {
+                        AppIcon(R.drawable.ic_check_native, null, Modifier.size(22.dp)); Spacer(Modifier.width(5.dp)); Text("تأیید")
+                    }
                 }
             }
         }

@@ -19,6 +19,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -28,6 +29,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -99,6 +101,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -453,6 +456,33 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
                             Box(
                                 Modifier.fillMaxSize()
                                     .background(Color.Black.copy(alpha = 0.56f * drawerProgress))
+                                    .pointerInput(drawerOpen, drawerWidthPx) {
+                                        if (drawerOpen) {
+                                            var progress = 1f
+                                            var dragDistance = 0f
+                                            detectHorizontalDragGestures(
+                                                onDragStart = {
+                                                    progress = 1f
+                                                    dragDistance = 0f
+                                                    drawerDragProgress = progress
+                                                    drawerIsDragging = true
+                                                },
+                                                onHorizontalDrag = { _, amount ->
+                                                    dragDistance += amount
+                                                    progress = (progress + amount / drawerWidthPx).coerceIn(0f, 1f)
+                                                    drawerDragProgress = progress
+                                                },
+                                                onDragEnd = {
+                                                    val shouldClose = dragDistance < -drawerWidthPx * 0.18f || progress < 0.45f
+                                                    settleDrawer(!shouldClose, progress)
+                                                },
+                                                onDragCancel = {
+                                                    val shouldClose = dragDistance < -drawerWidthPx * 0.18f || progress < 0.45f
+                                                    settleDrawer(!shouldClose, progress)
+                                                }
+                                            )
+                                        }
+                                    }
                                     .clickable { settleDrawer(false) }
                             )
                             DrawerPanel(
@@ -672,6 +702,14 @@ private fun DashboardPage(
     val now = PersianDates.nowIran()
     val week = PersianDates.weekIndex(selectedDateIso, state.termStartDate)
     var quickAddExpanded by remember { mutableStateOf(false) }
+    var daySwipeOffset by remember { mutableFloatStateOf(0f) }
+    val daySwipeScope = rememberCoroutineScope()
+    val quickAddRotation by animateFloatAsState(
+        targetValue = if (quickAddExpanded) 45f else 0f,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
+        label = "quick-add-rotation"
+    )
+    LaunchedEffect(selectedDateIso) { daySwipeOffset = 0f }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 13.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -699,57 +737,65 @@ private fun DashboardPage(
             IconButton(onClick = { onStepDay(1) }, modifier = Modifier.size(44.dp)) { Icon(Icons.Filled.KeyboardArrowLeft, "روز بعد", tint = colors.accentSoft, modifier = Modifier.size(30.dp)) }
         }
 
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            AnimatedContent(
-                targetState = selectedDateIso,
-                modifier = Modifier.fillMaxSize().pointerInput(selectedDateIso) {
-                    var drag = 0f
-                    detectHorizontalDragGestures(onHorizontalDrag = { _, amount -> drag += amount }, onDragEnd = {
-                        if (drag > 70f) onStepDay(1) else if (drag < -70f) onStepDay(-1)
-                        drag = 0f
-                    }, onDragCancel = { drag = 0f })
-                },
-                transitionSpec = {
-                    val direction = if (targetState > initialState) -1 else 1
-                    (slideInHorizontally(
-                        animationSpec = spring(dampingRatio = 0.88f, stiffness = 460f),
-                        initialOffsetX = { width -> direction * width / 3 }
-                    ) + fadeIn(animationSpec = tween(170))) togetherWith
-                        (slideOutHorizontally(
-                            animationSpec = spring(dampingRatio = 0.9f, stiffness = 500f),
-                            targetOffsetX = { width -> -direction * width / 3 }
-                        ) + fadeOut(animationSpec = tween(130)))
-                },
-                label = "dashboard-day"
-            ) { visibleDateIso ->
-                val visibleDate = remember(visibleDateIso) { PersianDates.parseIso(visibleDateIso) }
-                val entries = remember(state, visibleDateIso, clockTick) { dashboardItems(state, visibleDateIso) }
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 90.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    if (entries.isEmpty()) {
-                        EmptyCard(
-                            if (visibleDate == today) "امروز کلاسی ندارید" else "${PersianDates.weekday(visibleDate)} ${PersianDates.format(visibleDate)} کلاسی ندارید",
-                            colors, "مدیریت درس‌ها", onClick = onManageCourses
-                        )
-                    } else {
-                        entries.forEach { item ->
-                            when (item) {
-                                is DashboardItem.CourseItem -> ScheduleCard(
-                                    title = item.course.title, start = item.meeting.start, end = item.meeting.end,
-                                    status = meetingStatus(item.meeting.start, item.meeting.end, visibleDate, today, now.hour * 60 + now.minute),
-                                    meta = listOfNotNull(item.course.className.takeIf(String::isNotBlank)?.let { "کلاس $it" }, item.course.teacher.takeIf(String::isNotBlank)?.let { "استاد $it" }),
-                                    colors = colors, onClick = { onCourse(item.course.id) }
-                                )
-                                is DashboardItem.EventItem -> ScheduleCard(
-                                    title = item.event.title, start = item.event.start, end = item.event.end,
-                                    status = meetingStatus(item.event.start, item.event.end, visibleDate, today, now.hour * 60 + now.minute),
-                                    meta = listOf("رویداد"), colors = colors, onClick = { onEvent(item.event.toDraft()) }
-                                )
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val pageWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+            Box(
+                Modifier.fillMaxSize().clipToBounds().pointerInput(selectedDateIso, pageWidthPx) {
+                    var dragOffset = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { _ -> dragOffset = daySwipeOffset },
+                        onHorizontalDrag = { _, amount ->
+                            dragOffset = (dragOffset + amount).coerceIn(-pageWidthPx, pageWidthPx)
+                            daySwipeOffset = dragOffset
+                        },
+                        onDragEnd = {
+                            val dayDelta = when {
+                                dragOffset > pageWidthPx * 0.22f -> 1
+                                dragOffset < -pageWidthPx * 0.22f -> -1
+                                else -> 0
+                            }
+                            val targetOffset = dayDelta * pageWidthPx
+                            daySwipeScope.launch {
+                                Animatable(dragOffset).animateTo(
+                                    targetOffset,
+                                    animationSpec = spring(dampingRatio = 0.86f, stiffness = 390f)
+                                ) { daySwipeOffset = value }
+                                if (dayDelta != 0) onStepDay(dayDelta)
+                                daySwipeOffset = 0f
+                            }
+                        },
+                        onDragCancel = {
+                            val startOffset = daySwipeOffset
+                            daySwipeScope.launch {
+                                Animatable(startOffset).animateTo(
+                                    0f,
+                                    animationSpec = spring(dampingRatio = 0.86f, stiffness = 390f)
+                                ) { daySwipeOffset = value }
                             }
                         }
-                    }
+                    )
                 }
+            ) {
+                DashboardDayPage(
+                    modifier = Modifier.fillMaxSize().graphicsLayer { translationX = daySwipeOffset - pageWidthPx },
+                    state = state, date = selectedDate.minusDays(1), clockTick = clockTick,
+                    today = today, now = now, colors = colors, onCourse = onCourse,
+                    onManageCourses = onManageCourses, onEvent = onEvent
+                )
+                DashboardDayPage(
+                    modifier = Modifier.fillMaxSize().graphicsLayer { translationX = daySwipeOffset },
+                    state = state, date = selectedDate, clockTick = clockTick,
+                    today = today, now = now, colors = colors, onCourse = onCourse,
+                    onManageCourses = onManageCourses, onEvent = onEvent
+                )
+                DashboardDayPage(
+                    modifier = Modifier.fillMaxSize().graphicsLayer { translationX = daySwipeOffset + pageWidthPx },
+                    state = state, date = selectedDate.plusDays(1), clockTick = clockTick,
+                    today = today, now = now, colors = colors, onCourse = onCourse,
+                    onManageCourses = onManageCourses, onEvent = onEvent
+                )
             }
-
+        }
             Column(Modifier.align(Alignment.BottomStart), horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 AnimatedVisibility(quickAddExpanded, enter = fadeIn(), exit = fadeOut()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -757,10 +803,64 @@ private fun DashboardPage(
                         FloatingChoice("رویداد", colors) { quickAddExpanded = false; onAddEvent() }
                     }
                 }
-                Button(onClick = { quickAddExpanded = !quickAddExpanded }, modifier = Modifier.size(58.dp), shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent)) {
-                    if (quickAddExpanded) Text("×", color = Color.White, fontSize = 31.sp, fontWeight = FontWeight.Normal)
-                    else AppIcon(R.drawable.add, "افزودن مورد", Modifier.size(30.dp))
+                Surface(
+                    onClick = { quickAddExpanded = !quickAddExpanded },
+                    modifier = Modifier.size(62.dp), shape = CircleShape,
+                    color = colors.accent, shadowElevation = 8.dp
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        AppIcon(
+                            R.drawable.add, "افزودن مورد",
+                            Modifier.size(45.dp).graphicsLayer { rotationZ = quickAddRotation }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardDayPage(
+    modifier: Modifier,
+    state: AppState,
+    date: LocalDate,
+    clockTick: Int,
+    today: LocalDate,
+    now: java.time.ZonedDateTime,
+    colors: NativePalette,
+    onCourse: (String) -> Unit,
+    onManageCourses: () -> Unit,
+    onEvent: (EventDraft) -> Unit
+) {
+    val dateIso = remember(date) { PersianDates.iso(date) }
+    val entries = remember(state, dateIso, clockTick) { dashboardItems(state, dateIso) }
+    Column(
+        modifier.verticalScroll(rememberScrollState()).padding(bottom = 90.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp)
+    ) {
+        if (entries.isEmpty()) {
+            EmptyCard(
+                if (date == today) "امروز کلاسی ندارید" else "${PersianDates.weekday(date)} ${PersianDates.format(date)} کلاسی ندارید",
+                colors, "مدیریت درس‌ها", onClick = onManageCourses
+            )
+        } else {
+            entries.forEach { item ->
+                when (item) {
+                    is DashboardItem.CourseItem -> ScheduleCard(
+                        title = item.course.title, start = item.meeting.start, end = item.meeting.end,
+                        status = meetingStatus(item.meeting.start, item.meeting.end, date, today, now.hour * 60 + now.minute),
+                        meta = listOfNotNull(
+                            item.course.className.takeIf(String::isNotBlank)?.let { "کلاس $it" },
+                            item.course.teacher.takeIf(String::isNotBlank)?.let { "استاد $it" }
+                        ),
+                        colors = colors, onClick = { onCourse(item.course.id) }
+                    )
+                    is DashboardItem.EventItem -> ScheduleCard(
+                        title = item.event.title, start = item.event.start, end = item.event.end,
+                        status = meetingStatus(item.event.start, item.event.end, date, today, now.hour * 60 + now.minute),
+                        meta = listOf("رویداد"), colors = colors, onClick = { onEvent(item.event.toDraft()) }
+                    )
                 }
             }
         }
@@ -818,24 +918,45 @@ private fun ScheduleCard(
     colors: NativePalette, onClick: () -> Unit
 ) {
     val edge = when (status) { "live" -> colors.live; "done" -> colors.done; else -> colors.upcoming }
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(15.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.panel), border = BorderStroke(1.dp, colors.line)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 78.dp).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(Modifier.width(3.dp).height(48.dp), color = edge, shape = RoundedCornerShape(4.dp)) {}
-            Spacer(Modifier.width(10.dp))
+    Card(
+        onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(19.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.panel),
+        border = BorderStroke(1.dp, edge.copy(alpha = 0.32f))
+    ) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 86.dp).padding(horizontal = 13.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(Modifier.width(4.dp).height(58.dp), color = edge, shape = CircleShape) {}
+            Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, color = colors.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (meta.isNotEmpty()) {
-                    Spacer(Modifier.height(2.dp))
+                    Spacer(Modifier.height(5.dp))
                     Text(meta.joinToString("   •   "), color = colors.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.width(106.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (validTime(start) && validTime(end)) "${start.faDigits()} – ${end.faDigits()}" else "—", color = colors.text, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(5.dp))
-                Surface(color = edge.copy(alpha = 0.15f), shape = RoundedCornerShape(8.dp)) {
-                    Text(when (status) { "live" -> "در حال برگزاری"; "done" -> "تمام‌شده"; else -> "در پیش" }, Modifier.padding(horizontal = 8.dp, vertical = 3.dp), color = edge, fontSize = 11.sp)
+            Spacer(Modifier.width(8.dp))
+            Surface(
+                modifier = Modifier.widthIn(min = 104.dp),
+                color = edge.copy(alpha = 0.12f), shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, edge.copy(alpha = 0.2f))
+            ) {
+                Column(
+                    Modifier.padding(horizontal = 9.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        if (validTime(start) && validTime(end)) "${start.faDigits()} – ${end.faDigits()}" else "—",
+                        color = colors.text, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
+                    Text(
+                        when (status) { "live" -> "در حال برگزاری"; "done" -> "تمام‌شده"; else -> "در پیش" },
+                        color = edge, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
                 }
             }
         }

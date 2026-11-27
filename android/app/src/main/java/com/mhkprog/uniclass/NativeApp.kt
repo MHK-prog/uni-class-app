@@ -95,6 +95,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -124,6 +125,7 @@ import androidx.compose.ui.zIndex
 import androidx.core.view.WindowCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -703,13 +705,24 @@ private fun DashboardPage(
     val week = PersianDates.weekIndex(selectedDateIso, state.termStartDate)
     var quickAddExpanded by remember { mutableStateOf(false) }
     var daySwipeOffset by remember { mutableFloatStateOf(0f) }
+    var swipeSettleJob by remember { mutableStateOf<Job?>(null) }
+    var swipeChangedDate by remember { mutableStateOf(false) }
     val daySwipeScope = rememberCoroutineScope()
+    val currentOnStepDay = rememberUpdatedState(onStepDay)
     val quickAddRotation by animateFloatAsState(
         targetValue = if (quickAddExpanded) 45f else 0f,
         animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
         label = "quick-add-rotation"
     )
-    LaunchedEffect(selectedDateIso) { daySwipeOffset = 0f }
+    LaunchedEffect(selectedDateIso) {
+        if (swipeChangedDate) {
+            swipeChangedDate = false
+        } else {
+            swipeSettleJob?.cancel()
+            swipeSettleJob = null
+            daySwipeOffset = 0f
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 13.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -741,38 +754,46 @@ private fun DashboardPage(
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val pageWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
             Box(
-                Modifier.fillMaxSize().clipToBounds().pointerInput(selectedDateIso, pageWidthPx) {
+                Modifier.fillMaxSize().clipToBounds().pointerInput(pageWidthPx) {
                     var dragOffset = 0f
+                    var dragDistance = 0f
                     detectHorizontalDragGestures(
-                        onDragStart = { _ -> dragOffset = daySwipeOffset },
+                        onDragStart = { _ ->
+                            swipeSettleJob?.cancel()
+                            swipeSettleJob = null
+                            dragDistance = 0f
+                            dragOffset = daySwipeOffset
+                        },
                         onHorizontalDrag = { _, amount ->
+                            dragDistance += amount
                             dragOffset = (dragOffset + amount).coerceIn(-pageWidthPx, pageWidthPx)
                             daySwipeOffset = dragOffset
                         },
                         onDragEnd = {
+                            val threshold = pageWidthPx * 0.22f
                             val dayDelta = when {
-                                dragOffset > pageWidthPx * 0.22f -> -1
-                                dragOffset < -pageWidthPx * 0.22f -> 1
+                                dragDistance > threshold && dragOffset > threshold -> 1
+                                dragDistance < -threshold && dragOffset < -threshold -> -1
                                 else -> 0
                             }
-                            val targetOffset = when (dayDelta) {
-                                -1 -> pageWidthPx
-                                1 -> -pageWidthPx
-                                else -> 0f
+                            if (dayDelta != 0) {
+                                swipeChangedDate = true
+                                currentOnStepDay.value(dayDelta)
+                                daySwipeOffset = dragOffset - dayDelta * pageWidthPx
                             }
-                            daySwipeScope.launch {
-                                Animatable(dragOffset).animateTo(
-                                    targetOffset,
+                            val settleFrom = daySwipeOffset
+                            swipeSettleJob = daySwipeScope.launch {
+                                Animatable(settleFrom).animateTo(
+                                    0f,
                                     animationSpec = spring(dampingRatio = 0.86f, stiffness = 390f)
                                 ) { daySwipeOffset = value }
-                                if (dayDelta != 0) onStepDay(dayDelta)
-                                daySwipeOffset = 0f
                             }
                         },
                         onDragCancel = {
-                            val startOffset = daySwipeOffset
-                            daySwipeScope.launch {
-                                Animatable(startOffset).animateTo(
+                            swipeSettleJob?.cancel()
+                            val settleFrom = daySwipeOffset
+                            swipeSettleJob = daySwipeScope.launch {
+                                Animatable(settleFrom).animateTo(
                                     0f,
                                     animationSpec = spring(dampingRatio = 0.86f, stiffness = 390f)
                                 ) { daySwipeOffset = value }
@@ -783,7 +804,7 @@ private fun DashboardPage(
             ) {
                 DashboardDayPage(
                     modifier = Modifier.fillMaxSize().graphicsLayer { translationX = daySwipeOffset - pageWidthPx },
-                    state = state, date = selectedDate.minusDays(1), clockTick = clockTick,
+                    state = state, date = selectedDate.plusDays(1), clockTick = clockTick,
                     today = today, now = now, colors = colors, onCourse = onCourse,
                     onManageCourses = onManageCourses, onEvent = onEvent
                 )
@@ -795,7 +816,7 @@ private fun DashboardPage(
                 )
                 DashboardDayPage(
                     modifier = Modifier.fillMaxSize().graphicsLayer { translationX = daySwipeOffset + pageWidthPx },
-                    state = state, date = selectedDate.plusDays(1), clockTick = clockTick,
+                    state = state, date = selectedDate.minusDays(1), clockTick = clockTick,
                     today = today, now = now, colors = colors, onCourse = onCourse,
                     onManageCourses = onManageCourses, onEvent = onEvent
                 )

@@ -737,7 +737,8 @@ private fun DashboardPage(
             IconButton(onClick = { onStepDay(1) }, modifier = Modifier.size(44.dp)) { Icon(Icons.Filled.KeyboardArrowLeft, "روز بعد", tint = colors.accentSoft, modifier = Modifier.size(30.dp)) }
         }
 
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
             val pageWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
             Box(
                 Modifier.fillMaxSize().clipToBounds().pointerInput(selectedDateIso, pageWidthPx) {

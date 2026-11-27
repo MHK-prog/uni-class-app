@@ -8,7 +8,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,6 +17,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -37,7 +40,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -86,20 +88,23 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.graphicsLayer
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -112,8 +117,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
+import androidx.core.view.WindowCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -193,6 +201,15 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
     var route by remember { mutableStateOf<NativeRoute>(NativeRoute.Dashboard) }
     val history = remember { mutableStateListOf<NativeRoute>() }
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
+    var drawerIsDragging by remember { mutableStateOf(false) }
+    var drawerDragProgress by remember { mutableFloatStateOf(0f) }
+    val drawerScope = rememberCoroutineScope()
+    val drawerAnimation = remember { Animatable(if (drawerOpen) 1f else 0f) }
+    val animatedDrawerProgress = drawerAnimation.value
+    val drawerProgress = if (drawerIsDragging) drawerDragProgress else animatedDrawerProgress
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val drawerWidth = (screenWidth * 0.78f).coerceIn(220.dp, 340.dp)
+    val drawerWidthPx = with(LocalDensity.current) { drawerWidth.toPx() }
     var selectedDateIso by rememberSaveable { mutableStateOf(PersianDates.iso(PersianDates.todayIran())) }
     var clockTick by remember { mutableIntStateOf(0) }
     var detailCourseId by remember { mutableStateOf<String?>(null) }
@@ -204,13 +221,25 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
     var toastText by remember { mutableStateOf("") }
     var selectedMht by remember { mutableStateOf<SelectedMht?>(null) }
 
+    fun settleDrawer(open: Boolean, fromProgress: Float? = null) {
+        drawerOpen = open
+        drawerScope.launch {
+            if (fromProgress != null) drawerAnimation.snapTo(fromProgress)
+            drawerIsDragging = false
+            drawerAnimation.animateTo(
+                targetValue = if (open) 1f else 0f,
+                animationSpec = spring(dampingRatio = 0.88f, stiffness = 480f)
+            )
+        }
+    }
+
     fun navigate(destination: NativeRoute) {
         history.add(route)
         route = destination
-        drawerOpen = false
+        settleDrawer(false)
     }
     fun goBack() {
-        if (drawerOpen) drawerOpen = false
+        if (drawerOpen) settleDrawer(false)
         else if (eventDraft != null) eventDraft = null
         else if (dateDialog != null) dateDialog = null
         else if (fieldEditor != null) fieldEditor = null
@@ -222,7 +251,7 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
     fun changePage(destination: NativeRoute) {
         history.clear()
         route = destination
-        drawerOpen = false
+        settleDrawer(false)
     }
     fun updateCourse(courseId: String, transform: (Course) -> Course) {
         store.update { app -> app.copy(courses = app.courses.map { if (it.id == courseId) transform(it) else it }) }
@@ -302,11 +331,12 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
     SideEffect {
         val window = (context as? Activity)?.window ?: return@SideEffect
         val lightBars = state.preferences.theme == "light"
-        window.statusBarColor = colors.background.toArgb()
-        window.navigationBarColor = colors.background.toArgb()
-        var flags = if (lightBars) View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR else 0
-        if (Build.VERSION.SDK_INT >= 26 && lightBars) flags = flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-        window.decorView.systemUiVisibility = flags
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = lightBars
+            isAppearanceLightNavigationBars = lightBars
+        }
         if (Build.VERSION.SDK_INT >= 29) {
             window.isStatusBarContrastEnforced = false
             window.isNavigationBarContrastEnforced = false
@@ -317,26 +347,19 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
         val vazirFamily = remember { FontFamily(Font(R.font.vazirmatn_regular, FontWeight.Normal)) }
         MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography.withFont(vazirFamily)) {
             Surface(Modifier.fillMaxSize(), color = colors.background) {
-                Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         Column(
                         Modifier.fillMaxHeight().widthIn(max = 560.dp).fillMaxWidth().align(Alignment.TopCenter)
-                            .windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 14.dp)
-                            .pointerInput(drawerOpen) {
-                                var startedAtLeft = false
-                                var distance = 0f
-                                detectHorizontalDragGestures(onDragStart = { startedAtLeft = it.x < 36.dp.toPx(); distance = 0f },
-                                    onHorizontalDrag = { _, amount -> distance += amount },
-                                    onDragEnd = { if (!drawerOpen && startedAtLeft && distance > 75f) drawerOpen = true },
-                                    onDragCancel = { distance = 0f })
-                            }
+                            .padding(horizontal = 14.dp)
                     ) {
-                        TopBar(colors = colors, onMenu = { drawerOpen = true })
+                            TopBar(colors = colors, onMenu = { settleDrawer(true) })
                         AnimatedContent(targetState = route, label = "app-page") { currentRoute ->
                             when (currentRoute) {
                                 NativeRoute.Dashboard -> DashboardPage(
                                     state = state, selectedDateIso = selectedDateIso, clockTick = clockTick,
                                     colors = colors, onStepDay = { delta -> selectedDateIso = PersianDates.iso(PersianDates.parseIso(selectedDateIso).plusDays(delta.toLong())) },
                                     onPickDate = { openDatePicker(PersianDates.parseIso(selectedDateIso)) { selectedDateIso = PersianDates.iso(it) } },
+                                    onToday = { selectedDateIso = PersianDates.iso(PersianDates.todayIran()) },
                                     onCourse = { detailCourseId = it },
                                     onManageCourses = { navigate(NativeRoute.Courses) },
                                     onAddCourse = { navigate(NativeRoute.CourseEditor(null)) },
@@ -425,29 +448,82 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
                         }
                     }
 
-                    AnimatedVisibility(
-                        visible = drawerOpen,
-                        enter = fadeIn(), exit = fadeOut(),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Box(Modifier.fillMaxSize()) {
-                            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.56f)).clickable { drawerOpen = false })
-                            AnimatedVisibility(
-                                visible = drawerOpen,
-                                enter = slideInHorizontally(initialOffsetX = { -it }),
-                                exit = slideOutHorizontally(targetOffsetX = { -it }),
+                    if (drawerOpen || drawerIsDragging || animatedDrawerProgress > 0.001f) {
+                        Box(Modifier.fillMaxSize().zIndex(5f)) {
+                            Box(
+                                Modifier.fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.56f * drawerProgress))
+                                    .clickable { settleDrawer(false) }
+                            )
+                            DrawerPanel(
                                 modifier = Modifier.align(AbsoluteAlignment.TopLeft)
-                            ) {
-                                DrawerPanel(
-                                    colors = colors, onClose = { drawerOpen = false },
-                                    onDashboard = { changePage(NativeRoute.Dashboard) },
-                                    onCourses = { changePage(NativeRoute.Courses) },
-                                    onSettings = { changePage(NativeRoute.Settings) },
-                                    onAlarms = { changePage(NativeRoute.Alarms) },
-                                    onHelp = { changePage(NativeRoute.Help) }
-                                )
-                            }
+                                    .width(drawerWidth).fillMaxHeight()
+                                    .graphicsLayer { translationX = -drawerWidthPx * (1f - drawerProgress) }
+                                    .pointerInput(drawerOpen, drawerWidthPx) {
+                                        if (drawerOpen) {
+                                            var active = false
+                                            var progress = 1f
+                                            detectHorizontalDragGestures(
+                                                onDragStart = {
+                                                    active = true
+                                                    progress = 1f
+                                                    drawerDragProgress = progress
+                                                    drawerIsDragging = true
+                                                },
+                                                onHorizontalDrag = { _, amount ->
+                                                    if (active) {
+                                                        progress = (progress + amount / drawerWidthPx).coerceIn(0f, 1f)
+                                                        drawerDragProgress = progress
+                                                    }
+                                                },
+                                                onDragEnd = {
+                                                    if (active) settleDrawer(progress >= 0.45f, progress)
+                                                },
+                                                onDragCancel = {
+                                                    if (active) settleDrawer(progress >= 0.45f, progress)
+                                                }
+                                            )
+                                        }
+                                    },
+                                colors = colors,
+                                onDashboard = { changePage(NativeRoute.Dashboard) },
+                                onCourses = { changePage(NativeRoute.Courses) },
+                                onSettings = { changePage(NativeRoute.Settings) },
+                                onAlarms = { changePage(NativeRoute.Alarms) },
+                                onHelp = { changePage(NativeRoute.Help) }
+                            )
                         }
+                    }
+
+                    if (!drawerOpen) {
+                        Box(
+                            Modifier.align(AbsoluteAlignment.CenterLeft).zIndex(6f)
+                                .width(28.dp).fillMaxHeight()
+                                .pointerInput(drawerOpen, drawerWidthPx) {
+                                    var active = false
+                                    var progress = 0f
+                                    detectHorizontalDragGestures(
+                                        onDragStart = {
+                                            active = true
+                                            progress = 0f
+                                            drawerDragProgress = progress
+                                            drawerIsDragging = true
+                                        },
+                                        onHorizontalDrag = { _, amount ->
+                                            if (active) {
+                                                progress = (progress + amount / drawerWidthPx).coerceIn(0f, 1f)
+                                                drawerDragProgress = progress
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            if (active) settleDrawer(progress >= 0.45f, progress)
+                                        },
+                                        onDragCancel = {
+                                            if (active) settleDrawer(progress >= 0.45f, progress)
+                                        }
+                                    )
+                                }
+                        )
                     }
 
                     if (detailCourseId != null) {
@@ -551,20 +627,17 @@ private fun AppIcon(resource: Int, description: String?, modifier: Modifier = Mo
 
 @Composable
 private fun DrawerPanel(
-    colors: NativePalette, onClose: () -> Unit, onDashboard: () -> Unit,
+    modifier: Modifier = Modifier, colors: NativePalette, onDashboard: () -> Unit,
     onCourses: () -> Unit, onSettings: () -> Unit, onAlarms: () -> Unit, onHelp: () -> Unit
 ) {
     Column(
-        Modifier.fillMaxHeight().widthIn(min = 250.dp, max = 340.dp).fillMaxWidth(0.78f)
+        modifier.fillMaxHeight()
             .clip(RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp))
-            .then(Modifier)
-            .padding(0.dp)
     ) {
         Surface(Modifier.fillMaxSize(), color = colors.background, border = BorderStroke(1.dp, colors.line), shape = RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("منو", Modifier.weight(1f), color = colors.text, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                    IconButton(onClick = onClose) { AppIcon(R.drawable.ic_close_native, "بستن", Modifier.size(30.dp)) }
+                    Text("منو", color = colors.text, fontSize = 21.sp, fontWeight = FontWeight.Bold)
                 }
                 DrawerItem("برنامه", colors, onDashboard)
                 DrawerItem("مدیریت درس‌ها", colors, onCourses)
@@ -590,24 +663,15 @@ private fun DrawerItem(label: String, colors: NativePalette, onClick: () -> Unit
 @Composable
 private fun DashboardPage(
     state: AppState, selectedDateIso: String, clockTick: Int, colors: NativePalette,
-    onStepDay: (Int) -> Unit, onPickDate: () -> Unit, onCourse: (String) -> Unit, onManageCourses: () -> Unit,
+    onStepDay: (Int) -> Unit, onPickDate: () -> Unit, onToday: () -> Unit,
+    onCourse: (String) -> Unit, onManageCourses: () -> Unit,
     onAddCourse: () -> Unit, onAddEvent: () -> Unit, onEvent: (EventDraft) -> Unit
 ) {
     val selectedDate = remember(selectedDateIso) { PersianDates.parseIso(selectedDateIso) }
     val today = PersianDates.todayIran()
     val now = PersianDates.nowIran()
     val week = PersianDates.weekIndex(selectedDateIso, state.termStartDate)
-    val entries = remember(state, selectedDateIso, clockTick) {
-        val dayName = PersianDates.weekday(selectedDate)
-        val schedule = state.courses.flatMap { course ->
-            course.scheduleByWeek.getOrNull(week).orEmpty().filter { it.day == dayName }
-                .map { DashboardItem.CourseItem(course, it) }
-        }
-        val events = state.events.filter { it.date == selectedDateIso }.map { DashboardItem.EventItem(it) }
-        (schedule + events).sortedWith(compareBy<DashboardItem> { it.startMinute() }.thenBy { it.title() })
-    }
     var quickAddExpanded by remember { mutableStateOf(false) }
-    val calendarWidth = LocalConfiguration.current.screenWidthDp
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 13.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -616,43 +680,71 @@ private fun DashboardPage(
             DayCapsule("روز هفته", PersianDates.weekday(selectedDate), colors, Modifier.weight(1f))
             DayCapsule("نوع هفته", if (week == 0) "فرد" else "زوج", colors, Modifier.weight(0.8f), accent = true)
         }
-        Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            IconButton(onClick = { onStepDay(-1) }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.KeyboardArrowRight, "روز قبل", tint = colors.accentSoft, modifier = Modifier.size(32.dp)) }
+        Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            IconButton(onClick = { onStepDay(-1) }, modifier = Modifier.size(44.dp)) { Icon(Icons.Filled.KeyboardArrowRight, "روز قبل", tint = colors.accentSoft, modifier = Modifier.size(30.dp)) }
             Surface(onClick = onPickDate, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp), color = colors.panel, border = BorderStroke(1.dp, colors.line)) {
                 Row(Modifier.height(48.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                     Text("انتخاب تاریخ", color = colors.text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 }
             }
-            IconButton(onClick = { onStepDay(1) }, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.KeyboardArrowLeft, "روز بعد", tint = colors.accentSoft, modifier = Modifier.size(32.dp)) }
+            Surface(
+                onClick = onToday, modifier = Modifier.height(48.dp), shape = RoundedCornerShape(13.dp),
+                color = if (selectedDate == today) colors.accent.copy(alpha = 0.18f) else colors.panel,
+                border = BorderStroke(1.dp, if (selectedDate == today) colors.accent.copy(alpha = 0.5f) else colors.line)
+            ) {
+                Box(Modifier.padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+                    Text("امروز", color = if (selectedDate == today) colors.accentSoft else colors.text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                }
+            }
+            IconButton(onClick = { onStepDay(1) }, modifier = Modifier.size(44.dp)) { Icon(Icons.Filled.KeyboardArrowLeft, "روز بعد", tint = colors.accentSoft, modifier = Modifier.size(30.dp)) }
         }
 
-        Box(Modifier.weight(1f).fillMaxWidth().pointerInput(selectedDateIso) {
-            var drag = 0f
-            detectHorizontalDragGestures(onHorizontalDrag = { _, amount -> drag += amount }, onDragEnd = {
-                if (drag > 70f) onStepDay(1) else if (drag < -70f) onStepDay(-1)
-                drag = 0f
-            }, onDragCancel = { drag = 0f })
-        }) {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 90.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                if (entries.isEmpty()) {
-                    EmptyCard(
-                        if (selectedDate == today) "امروز کلاسی ندارید" else "${PersianDates.weekday(selectedDate)} ${PersianDates.format(selectedDate)} کلاسی ندارید",
-                        colors, "مدیریت درس‌ها", onClick = onManageCourses
-                    )
-                } else {
-                    entries.forEach { item ->
-                        when (item) {
-                            is DashboardItem.CourseItem -> ScheduleCard(
-                                title = item.course.title, start = item.meeting.start, end = item.meeting.end,
-                                status = meetingStatus(item.meeting.start, item.meeting.end, selectedDate, today, now.hour * 60 + now.minute),
-                                meta = listOfNotNull(item.course.className.takeIf(String::isNotBlank)?.let { "کلاس $it" }, item.course.teacher.takeIf(String::isNotBlank)?.let { "استاد $it" }),
-                                colors = colors, onClick = { onCourse(item.course.id) }
-                            )
-                            is DashboardItem.EventItem -> ScheduleCard(
-                                title = item.event.title, start = item.event.start, end = item.event.end,
-                                status = meetingStatus(item.event.start, item.event.end, selectedDate, today, now.hour * 60 + now.minute),
-                                meta = listOf("رویداد"), colors = colors, onClick = { onEvent(item.event.toDraft()) }
-                            )
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            AnimatedContent(
+                targetState = selectedDateIso,
+                modifier = Modifier.fillMaxSize().pointerInput(selectedDateIso) {
+                    var drag = 0f
+                    detectHorizontalDragGestures(onHorizontalDrag = { _, amount -> drag += amount }, onDragEnd = {
+                        if (drag > 70f) onStepDay(1) else if (drag < -70f) onStepDay(-1)
+                        drag = 0f
+                    }, onDragCancel = { drag = 0f })
+                },
+                transitionSpec = {
+                    val direction = if (targetState > initialState) -1 else 1
+                    (slideInHorizontally(
+                        animationSpec = spring(dampingRatio = 0.88f, stiffness = 460f),
+                        initialOffsetX = { width -> direction * width / 3 }
+                    ) + fadeIn(animationSpec = tween(170))) togetherWith
+                        (slideOutHorizontally(
+                            animationSpec = spring(dampingRatio = 0.9f, stiffness = 500f),
+                            targetOffsetX = { width -> -direction * width / 3 }
+                        ) + fadeOut(animationSpec = tween(130)))
+                },
+                label = "dashboard-day"
+            ) { visibleDateIso ->
+                val visibleDate = remember(visibleDateIso) { PersianDates.parseIso(visibleDateIso) }
+                val entries = remember(state, visibleDateIso, clockTick) { dashboardItems(state, visibleDateIso) }
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 90.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    if (entries.isEmpty()) {
+                        EmptyCard(
+                            if (visibleDate == today) "امروز کلاسی ندارید" else "${PersianDates.weekday(visibleDate)} ${PersianDates.format(visibleDate)} کلاسی ندارید",
+                            colors, "مدیریت درس‌ها", onClick = onManageCourses
+                        )
+                    } else {
+                        entries.forEach { item ->
+                            when (item) {
+                                is DashboardItem.CourseItem -> ScheduleCard(
+                                    title = item.course.title, start = item.meeting.start, end = item.meeting.end,
+                                    status = meetingStatus(item.meeting.start, item.meeting.end, visibleDate, today, now.hour * 60 + now.minute),
+                                    meta = listOfNotNull(item.course.className.takeIf(String::isNotBlank)?.let { "کلاس $it" }, item.course.teacher.takeIf(String::isNotBlank)?.let { "استاد $it" }),
+                                    colors = colors, onClick = { onCourse(item.course.id) }
+                                )
+                                is DashboardItem.EventItem -> ScheduleCard(
+                                    title = item.event.title, start = item.event.start, end = item.event.end,
+                                    status = meetingStatus(item.event.start, item.event.end, visibleDate, today, now.hour * 60 + now.minute),
+                                    meta = listOf("رویداد"), colors = colors, onClick = { onEvent(item.event.toDraft()) }
+                                )
+                            }
                         }
                     }
                 }
@@ -667,7 +759,8 @@ private fun DashboardPage(
                 }
                 Button(onClick = { quickAddExpanded = !quickAddExpanded }, modifier = Modifier.size(58.dp), shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(containerColor = colors.accent)) {
-                    Text(if (quickAddExpanded) "×" else "+", color = Color.White, fontSize = 31.sp, fontWeight = FontWeight.Normal)
+                    if (quickAddExpanded) Text("×", color = Color.White, fontSize = 31.sp, fontWeight = FontWeight.Normal)
+                    else AppIcon(R.drawable.add, "افزودن مورد", Modifier.size(30.dp))
                 }
             }
         }
@@ -682,6 +775,18 @@ private sealed class DashboardItem {
         is EventItem -> timeMinute(event.start)
     }
     fun title(): String = when (this) { is CourseItem -> course.title; is EventItem -> event.title }
+}
+
+private fun dashboardItems(state: AppState, dateIso: String): List<DashboardItem> {
+    val date = PersianDates.parseIso(dateIso)
+    val week = PersianDates.weekIndex(dateIso, state.termStartDate)
+    val dayName = PersianDates.weekday(date)
+    val courses = state.courses.flatMap { course ->
+        course.scheduleByWeek.getOrNull(week).orEmpty().filter { it.day == dayName }
+            .map { DashboardItem.CourseItem(course, it) }
+    }
+    val events = state.events.filter { it.date == dateIso }.map { DashboardItem.EventItem(it) }
+    return (courses + events).sortedWith(compareBy<DashboardItem> { it.startMinute() }.thenBy { it.title() })
 }
 
 private fun timeMinute(time: String): Int = time.enDigits().split(":").let { parts -> (parts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (parts.getOrNull(1)?.toIntOrNull() ?: 0) }
@@ -913,7 +1018,7 @@ private fun HelpPage(colors: NativePalette, onOpenGuide: () -> Unit) {
             Spacer(Modifier.width(7.dp))
             Text("مشاهدهٔ راهنمای کامل", fontSize = 15.sp)
         }
-        HelpCard("دیدن برنامهٔ روزانه", "با پیکان‌ها بین روزها جابه‌جا شوید یا «انتخاب تاریخ» را بزنید. هر جلسهٔ درس کارت جداگانه دارد و وضعیت آن با رنگ مشخص می‌شود.", colors)
+        HelpCard("دیدن برنامهٔ روزانه", "با کشیدن صفحه یا پیکان‌ها بین روزها جابه‌جا شوید. «امروز» به برنامهٔ امروز برمی‌گردد و «انتخاب تاریخ» برای رفتن به روز دلخواه است.", colors)
         HelpCard("افزودن درس و زمان", "از منو به مدیریت درس‌ها بروید و درس را بسازید. از جزئیات درس، بخش زمان‌های برگزاری را باز کنید و برای هر هفته، روز و ساعت جداگانه اضافه کنید.", colors)
         HelpCard("لینک و یادداشت", "در جزئیات هر درس می‌توانید لینک‌های موردنیاز و یادداشت‌های خودتان را ثبت، ویرایش یا حذف کنید.", colors)
         HelpCard("رویدادها", "دکمهٔ + پایین برنامه را بزنید، رویداد را انتخاب کنید و عنوان، تاریخ، ساعت یا توضیحات را وارد کنید.", colors)
@@ -1093,8 +1198,7 @@ private fun CourseDetailsDialog(
             shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, colors.line)) {
             Column(Modifier.heightIn(max = 680.dp).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("جزئیات درس", Modifier.weight(1f), color = colors.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    IconButton(onClick = onDismiss) { AppIcon(R.drawable.ic_close_native, "بستن", Modifier.size(28.dp)) }
+                    Text("جزئیات درس", color = colors.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
                 DetailRow("نام درس", course.title, colors) { onField("title") }
                 DetailRow("روز و ساعت", scheduleSummary(course), colors) { onCollection(CollectionType.SCHEDULE) }

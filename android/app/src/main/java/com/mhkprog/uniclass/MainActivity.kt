@@ -3,10 +3,7 @@ package com.mhkprog.uniclass
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.ui.Modifier
+import androidx.core.view.WindowCompat
 
 class MainActivity : ComponentActivity() {
     private lateinit var store: ScheduleStore
@@ -14,10 +11,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = ScheduleStore(applicationContext)
-        window.statusBarColor = android.graphics.Color.rgb(9, 8, 13)
-        window.navigationBarColor = android.graphics.Color.rgb(9, 8, 13)
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = 0
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
         setContent {
             EClassApp(store = store, onExit = ::finish)
         }

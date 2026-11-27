@@ -751,11 +751,15 @@ private fun DashboardPage(
                         },
                         onDragEnd = {
                             val dayDelta = when {
-                                dragOffset > pageWidthPx * 0.22f -> 1
-                                dragOffset < -pageWidthPx * 0.22f -> -1
+                                dragOffset > pageWidthPx * 0.22f -> -1
+                                dragOffset < -pageWidthPx * 0.22f -> 1
                                 else -> 0
                             }
-                            val targetOffset = dayDelta * pageWidthPx
+                            val targetOffset = when (dayDelta) {
+                                -1 -> pageWidthPx
+                                1 -> -pageWidthPx
+                                else -> 0f
+                            }
                             daySwipeScope.launch {
                                 Animatable(dragOffset).animateTo(
                                     targetOffset,

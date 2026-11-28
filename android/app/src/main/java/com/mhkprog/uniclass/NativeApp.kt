@@ -280,7 +280,7 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
     }
     LaunchedEffect(Unit) {
         attemptLegacyWebStorageRecovery(context, store) { recovered ->
-            if (recovered) toastText = "اطلاعات نسخهٔ ۱٫۱۵٫۱۱ بازیابی شد."
+            if (recovered) toastText = "اطلاعات نسخهٔ ۱٫۱۵٫۵ بازیابی شد."
         }
     }
     BackHandler { goBack() }

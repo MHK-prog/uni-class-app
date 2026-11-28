@@ -280,7 +280,7 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
     }
     LaunchedEffect(Unit) {
         attemptLegacyWebStorageRecovery(context, store) { recovered ->
-            if (recovered) toastText = "اطلاعات نسخهٔ قبلی بازیابی شد."
+            if (recovered) toastText = "اطلاعات نسخهٔ ۱٫۱۵٫۱۱ بازیابی شد."
         }
     }
     BackHandler { goBack() }
@@ -388,17 +388,7 @@ fun EClassApp(store: ScheduleStore, onExit: () -> Unit) {
                                         saveBackupLauncher.launch("eclass-backup.json")
                                     },
                                     onRestore = { restoreLauncher.launch(arrayOf("application/json", "text/json", "application/octet-stream")) },
-                                    onImport = { navigate(NativeRoute.Import) },
-                                    onRecoverLegacy = {
-                                        if (store.state.courses.isNotEmpty() || store.state.events.isNotEmpty()) {
-                                            toastText = "برای جلوگیری از جایگزینی، بازیابی فقط وقتی برنامهٔ فعلی خالی است انجام می‌شود."
-                                        } else {
-                                            attemptLegacyWebStorageRecovery(context, store, force = true) { recovered ->
-                                                toastText = if (recovered) "اطلاعات نسخهٔ قبلی بازیابی شد."
-                                                else "اطلاعاتی از نسخهٔ قبلی پیدا نشد."
-                                            }
-                                        }
-                                    }
+                                    onImport = { navigate(NativeRoute.Import) }
                                 )
                                 NativeRoute.Alarms -> AlarmSettingsPage(
                                     state = state,
@@ -1041,7 +1031,7 @@ private fun PageTitle(title: String, action: String, colors: NativePalette, onAc
 private fun SettingsPage(
     state: AppState, colors: NativePalette, onTermDate: () -> Unit,
     onTheme: (String) -> Unit, onAccent: (String) -> Unit,
-    onBackup: () -> Unit, onRestore: () -> Unit, onImport: () -> Unit, onRecoverLegacy: () -> Unit
+    onBackup: () -> Unit, onRestore: () -> Unit, onImport: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("تنظیمات", color = colors.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 7.dp))
@@ -1071,7 +1061,6 @@ private fun SettingsPage(
         SettingsGroup("پشتیبان و ورود اطلاعات", colors) {
             SettingRow("ذخیرهٔ پشتیبان", "ذخیرهٔ همهٔ درس‌ها، زمان‌ها و یادداشت‌ها", R.drawable.download, colors, onBackup)
             SettingRow("بارگذاری پشتیبان", "جایگزینی اطلاعات با فایل پشتیبان", R.drawable.upload, colors, onRestore)
-            SettingRow("بازیابی اطلاعات نسخهٔ قبلی", "بررسی اطلاعات ذخیره‌شده در نسخهٔ قبلی برنامه", R.drawable.upload, colors, onRecoverLegacy)
             SettingRow("وارد کردن از آموزشیار", "انتخاب فایل MHT یا MHTML", null, colors, onImport)
         }
     }

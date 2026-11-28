@@ -11,18 +11,17 @@ import org.json.JSONTokener
 
 private const val LEGACY_APP_ORIGIN = "https://appassets.androidplatform.net/assets/www/index.html"
 private const val LEGACY_STORAGE_KEY = "class-schedule-app-v1"
-private const val LEGACY_MIGRATION_CHECKED = "legacy-web-storage-migration-checked"
+private const val LEGACY_11511_MIGRATION_CHECKED = "legacy-1-15-11-web-storage-migration-checked"
 
 fun attemptLegacyWebStorageRecovery(
     context: Context,
     store: ScheduleStore,
-    force: Boolean = false,
     onFinished: (Boolean) -> Unit
 ) {
     val prefs = context.getSharedPreferences("eclass-native", Context.MODE_PRIVATE)
-    if (!force && prefs.getBoolean(LEGACY_MIGRATION_CHECKED, false)) return
+    if (prefs.getBoolean(LEGACY_11511_MIGRATION_CHECKED, false)) return
     if (store.state.courses.isNotEmpty() || store.state.events.isNotEmpty()) {
-        prefs.edit().putBoolean(LEGACY_MIGRATION_CHECKED, true).apply()
+        prefs.edit().putBoolean(LEGACY_11511_MIGRATION_CHECKED, true).apply()
         onFinished(false)
         return
     }
@@ -39,7 +38,7 @@ fun attemptLegacyWebStorageRecovery(
     fun finish(recovered: Boolean) {
         if (finished) return
         finished = true
-        prefs.edit().putBoolean(LEGACY_MIGRATION_CHECKED, true).apply()
+        prefs.edit().putBoolean(LEGACY_11511_MIGRATION_CHECKED, true).apply()
         reader.stopLoading()
         (reader.parent as? ViewGroup)?.removeView(reader)
         reader.destroy()

@@ -60,10 +60,11 @@ class ScheduleStore(context: Context) {
         prefs.edit().putString(KEY_STATE, encode(state).toString()).apply()
     }
 
-    fun restoreLegacy(json: String): Boolean {
+    fun restoreLegacyIfEmpty(json: String): Boolean {
+        if (state.courses.isNotEmpty() || state.events.isNotEmpty()) return false
         val legacy = runCatching { normalize(decode(json)) }.getOrNull() ?: return false
         if (legacy.courses.isEmpty() && legacy.events.isEmpty()) return false
-        state = legacy
+        state = legacy.copy(preferences = state.preferences)
         prefs.edit().putString(KEY_STATE, encode(state).toString()).apply()
         return true
     }

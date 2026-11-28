@@ -11,7 +11,7 @@ import org.json.JSONTokener
 
 private const val LEGACY_APP_ORIGIN = "https://appassets.androidplatform.net/assets/www/index.html"
 private const val LEGACY_STORAGE_KEY = "class-schedule-app-v1"
-private const val LEGACY_11511_MIGRATION_CHECKED = "legacy-1-15-11-web-storage-migration-checked"
+private const val LEGACY_11511_MIGRATION_CHECKED = "legacy-1-15-11-overwrite-migration-checked"
 
 fun attemptLegacyWebStorageRecovery(
     context: Context,
@@ -20,12 +20,6 @@ fun attemptLegacyWebStorageRecovery(
 ) {
     val prefs = context.getSharedPreferences("eclass-native", Context.MODE_PRIVATE)
     if (prefs.getBoolean(LEGACY_11511_MIGRATION_CHECKED, false)) return
-    if (store.state.courses.isNotEmpty() || store.state.events.isNotEmpty()) {
-        prefs.edit().putBoolean(LEGACY_11511_MIGRATION_CHECKED, true).apply()
-        onFinished(false)
-        return
-    }
-
     val activity = context.findActivity()
     val container = activity?.findViewById<ViewGroup>(android.R.id.content)
     if (activity == null || container == null) {
@@ -55,7 +49,7 @@ fun attemptLegacyWebStorageRecovery(
             runCatching {
                 view.evaluateJavascript("JSON.stringify(window.localStorage.getItem('$LEGACY_STORAGE_KEY'))") { encoded ->
                     val raw = runCatching { JSONTokener(encoded ?: "null").nextValue() as? String }.getOrNull()
-                    finish(raw?.let(store::restoreLegacyIfEmpty) == true)
+                    finish(raw?.let(store::restoreLegacy) == true)
                 }
             }.onFailure { finish(false) }
         }
